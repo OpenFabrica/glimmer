@@ -29,7 +29,7 @@ https://github.com/user-attachments/assets/d145fde9-a641-4543-8b15-dd7a2685de3d
 - 官网：[glimmerinput.app](https://glimmerinput.app)
 - 下载：[glimmerinput.app/download](https://glimmerinput.app/download)（macOS、Windows）
 - 文档：[glimmerinput.app/docs](https://glimmerinput.app/docs)（安装、按键、设置、数据与隐私）
-- 反馈：[GitHub Issues](https://github.com/rambocode/glimmer/issues/new/choose)
+- 反馈：[GitHub Issues](https://github.com/OpenFabrica/glimmer/issues/new/choose)
 
 ---
 

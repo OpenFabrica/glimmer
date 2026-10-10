@@ -20,7 +20,7 @@ members = [
 version = "0.1.1"
 edition = "2024"
 license = "GPL-3.0-or-later"
-repository = "https://github.com/rambocode/glimmer"
+repository = "https://github.com/OpenFabrica/glimmer"
 
 [workspace.lints.clippy]
 all = "warn"

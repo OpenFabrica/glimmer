@@ -25,5 +25,5 @@ step="$(python3 -c 'import json, sys; c = json.load(open(sys.argv[1])); print("%
 cargo run --release -q -p glimmer-dict-convert -- --out-dir "$MODEL_DIR" pack model --input "$MODEL_DIR" \
   --name "微明整句模型" --license "GPL-3.0-or-later" \
   --attribution "微明训练的字级语言模型；语料：中文维基百科（CC-BY-SA-4.0）、LCCC（MIT）" \
-  --source "https://github.com/rambocode/glimmer" --data-version "$step"
+  --source "https://github.com/OpenFabrica/glimmer" --data-version "$step"
 ls -la "$OUT"

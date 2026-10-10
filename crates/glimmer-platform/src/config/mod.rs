@@ -343,7 +343,7 @@ enabled = false
 # 有新版本只在菜单 / 设置的「关于」页提示，下载与安装都要你自己点；false 就只有手动点「检查更新」才查
 check = true
 # 版本清单地址，一般不用改
-feed_url = "https://github.com/rambocode/glimmer/releases/latest/download/releases.json"
+feed_url = "https://github.com/OpenFabrica/glimmer/releases/latest/download/releases.json"
 "#
 );
 

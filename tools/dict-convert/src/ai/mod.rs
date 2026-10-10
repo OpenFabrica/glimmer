@@ -172,7 +172,7 @@ pub fn convert(
         name: "AI 与软件开发".into(),
         license: "GPL-3.0-or-later AND Apache-2.0 AND CC-BY-SA-4.0 AND MIT AND Unicode-3.0 AND CC-BY-4.0".into(),
         attribution: "Glimmer contributors；动手学深度学习作者及中文贡献者；Eugene Siow 与 AI Glossary in Mandarin 贡献者；THUOCL；Unicode；Evan You 与 Vue 文档贡献者；Rust 中文社区".into(),
-        source: "https://github.com/rambocode/glimmer/tree/main/assets/lexicon/ai".into(),
+        source: "https://github.com/OpenFabrica/glimmer/tree/main/assets/lexicon/ai".into(),
         version,
         ..Metadata::default()
     })?;

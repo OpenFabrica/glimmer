@@ -14,7 +14,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-REPO="rambocode/glimmer"
+REPO="OpenFabrica/glimmer"
 cd "$ROOT"
 # pre-commit / pre-push 钩子跑 clippy 与测试，要用 rustup 钉的工具链（Homebrew 的新版 clippy 规则不同）
 export PATH="$HOME/.cargo/bin:$PATH"

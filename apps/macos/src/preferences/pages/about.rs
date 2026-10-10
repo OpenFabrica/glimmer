@@ -48,7 +48,7 @@ pub const ATTRIBUTIONS: &[(&str, &str)] = &[
 pub const WEBSITE_URL: &str = "https://glimmerinput.app";
 
 /// 源码与问题反馈。
-pub const REPOSITORY_URL: &str = "https://github.com/rambocode";
+pub const REPOSITORY_URL: &str = "https://github.com/OpenFabrica/glimmer";
 
 /// 隐私说明。
 pub const PRIVACY_NOTE: &str = "微明不上传任何数据。开着云联想或翻译时，光标附近的文字与拼音会发给你在「云服务」页填的 AI 服务商（缺省 DeepSeek）的服务器，不经过作者。检查更新只从 GitHub 下载一份版本清单，不带任何个人信息，可以关掉。「高级」页的输入日志只写在这台电脑的数据目录里，可以关掉或清空。";

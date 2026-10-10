@@ -189,7 +189,7 @@ Apple Developer 账号有了以后，在仓库 Secrets 里配齐 `release.yml` �
 ```json
 {
   "generated": "2026-09-07T12:00:00Z",
-  "repository": "rambocode/glimmer",
+  "repository": "OpenFabrica/glimmer",
   "latest": "0.1.0",
   "releases": [
     {
@@ -202,7 +202,7 @@ Apple Developer 账号有了以后，在仓库 Secrets 里配齐 `release.yml` �
       "toolchain": "rustc 1.96.0 (ac68faa20 2026-05-25)",
       "assets": [
         { "platform": "macos", "arch": "Apple Silicon", "file": "Glimmer-0.1.0-arm64.pkg",
-          "url": "https://github.com/rambocode/glimmer/releases/download/v0.1.0/Glimmer-0.1.0-arm64.pkg",
+          "url": "https://github.com/OpenFabrica/glimmer/releases/download/v0.1.0/Glimmer-0.1.0-arm64.pkg",
           "size": 35989277, "sha256": "…" },
         { "platform": "macos", "arch": "Intel", "file": "Glimmer-0.1.0-x86_64.pkg", "url": "…", "size": 36172871, "sha256": "…" }
       ]

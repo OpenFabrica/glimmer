@@ -29,6 +29,7 @@ for f in assets/glossary/glossary-*.tsv; do [ -f "$f" ] && sed -i '' '/^#/ s/qin
 grep -rlI --exclude-dir=.git --exclude=CHANGELOG.md --exclude=Cargo.lock --exclude='glossary-*.tsv' -e qingjian -e Qingjian -e QINGJIAN -e QingJian -e 青简 . | while read -r f; do
   sed -i '' \
     -e 's#qingjian-team/cosmic-text#@@COSMIC@@#g' \
+    -e 's#qingjian-team/qingjian#OpenFabrica/glimmer#g' \
     -e 's#qingjian-team#rambocode#g' \
     -e '/青简/ s/qing jian/wei ming/g' \
     -e 's/qingjian/glimmer/g' -e 's/Qingjian/Glimmer/g' -e 's/QingJian/Glimmer/g' -e 's/QINGJIAN/GLIMMER/g' -e 's/青简/微明/g' \

@@ -104,7 +104,7 @@ fn available_text(update: &Available) -> String {
 
 pub(crate) const WEBSITE_URL: &str = "https://glimmerinput.app";
 
-pub(crate) const REPOSITORY_URL: &str = "https://github.com/rambocode";
+pub(crate) const REPOSITORY_URL: &str = "https://github.com/OpenFabrica/glimmer";
 
 /// 与仓库根 `LICENSE` 一致。
 const LICENSE_NOTE: &str = "自由软件，GPL-3.0-or-later 许可证：可以自由使用、修改与再分发，修改后分发须同样开源。官方渠道免费。";

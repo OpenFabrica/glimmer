@@ -8,7 +8,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 LOCK="$ROOT/tools/release/data.lock"
 OUT="$ROOT/target/release-data"
-REPO="rambocode/glimmer"
+REPO="OpenFabrica/glimmer"
 ASSETS=(glimmer-data.tar.gz model.qjm)
 cd "$ROOT"
 

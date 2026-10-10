@@ -1,7 +1,7 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: glimmer
-Upstream-Contact: https://github.com/rambocode/glimmer/issues
-Source: https://github.com/rambocode/glimmer
+Upstream-Contact: https://github.com/OpenFabrica/glimmer/issues
+Source: https://github.com/OpenFabrica/glimmer
 
 Files: *
 Copyright: 微明 Glimmer contributors
@@ -46,7 +46,7 @@ Files: usr/lib/glimmer/data/generated/dict.qj usr/lib/glimmer/data/generated/dic
 Copyright: 通用规范汉字表；现代汉语常用词表（liuxilu 校对版）；THUOCL（清华大学自然语言处理实验室）；CC-CEDICT (MDBG)；jieba (Sun Junyi)；Unihan (Unicode, Inc.)
 License: MIT and Unicode-3.0 and CC-BY-SA-4.0
  补充常用词以 CC-CEDICT（CC BY-SA 4.0）与 jieba 词表（MIT）为候选白名单人工审定。
- 来源与许可声明见 https://github.com/rambocode/glimmer/tree/main/assets/lexicon 。
+ 来源与许可声明见 https://github.com/OpenFabrica/glimmer/tree/main/assets/lexicon 。
 
 Files: usr/lib/glimmer/data/generated/dicts/ai.qj usr/lib/glimmer/assets/lexicon/ai/*
 Copyright: Glimmer contributors; Aston Zhang, Zachary C. Lipton, Mu Li, Alexander J. Smola 与中文贡献者; Eugene Siow 与 AI Glossary in Mandarin 贡献者; THUOCL; Unicode; Evan You 与 Vue 文档贡献者; Rust 中文社区
@@ -69,4 +69,4 @@ Files: usr/lib/glimmer/assets/levels/*
 Copyright: The CEFR-J Wordlist Version 1.5, Yukio Tono (Tokyo University of Foreign Studies);
  Octanove Vocabulary Profile C1/C2 1.0; JLPT 词表 Jonathan Waller (tanos.co.uk), elzup/jlpt-word-list
 License: CEFR-J (free with attribution) and CC-BY-SA-4.0 and CC-BY and MIT
- 来源与署名写法见 https://github.com/rambocode/glimmer/tree/main/assets/levels 。
+ 来源与署名写法见 https://github.com/OpenFabrica/glimmer/tree/main/assets/levels 。

@@ -13,7 +13,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-REPO="rambocode/glimmer"
+REPO="OpenFabrica/glimmer"
 cd "$ROOT"
 # Homebrew 的 Rust 排在 PATH 前面时没有 x86_64 std、clippy 也与 CI 不同，统一用 rustup 钉的工具链
 export PATH="$HOME/.cargo/bin:$PATH"
