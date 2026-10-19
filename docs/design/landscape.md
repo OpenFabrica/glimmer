@@ -77,7 +77,7 @@
 
 | 数据 | 来源与许可 |
 |---|---|
-| 词库 | 通用规范汉字表；现代汉语常用词表（liuxilu 校对版）；THUOCL 领域词（清华大学自然语言处理实验室，MIT）；读音取自 Unihan（Unicode License v3） |
+| 词库 | 通用规范汉字表；现代汉语常用词表（liuxilu 校对版）；THUOCL 领域词（清华大学自然语言处理实验室，MIT）；补充常用词白名单 CC-CEDICT（MDBG，CC BY-SA 4.0）与 jieba 词表（MIT）；读音取自 Unihan（Unicode License v3） |
 | 语言模型 | 中文维基百科（CC BY-SA 4.0）与 LCCC（清华大学 CoAI，MIT）语料统计 |
 | 释义表 | 由大语言模型（DeepSeek）离线生成，微明自建 |
 | emoji | Unicode CLDR annotations（Unicode License v3） |

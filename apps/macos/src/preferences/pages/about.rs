@@ -22,7 +22,7 @@ pub const LICENSE_NOTE: &str = "自由软件，GPL-3.0-or-later 许可证：可�
 pub const ATTRIBUTIONS: &[(&str, &str)] = &[
     (
         "词库",
-        "通用规范汉字表；现代汉语常用词表（liuxilu 校对版）；THUOCL（清华大学自然语言处理实验室，MIT）；读音取自 Unihan（Unicode License v3）。",
+        "通用规范汉字表；现代汉语常用词表（liuxilu 校对版）；THUOCL（清华大学自然语言处理实验室，MIT）；补充常用词白名单 CC-CEDICT（MDBG，CC BY-SA 4.0）与 jieba 词表（MIT）；读音取自 Unihan（Unicode License v3）。",
     ),
     (
         "语言模型",
