@@ -216,7 +216,7 @@ Core `sentence::LanguageModel` trait 的实现，从 `data/generated/lm.qj`（�
 自己解析 `trak` 字距表、按主题 gamma 加深笔画；cosmic-text 打了 `opsz` 光学字号补丁（qingjian-team/cosmic-text 分支 `qingjian-opsz`，workspace `[patch.crates-io]` 钉 rev）。
 `examples/preview.rs` 出 PNG 与真机截图并排比、`--measure` 与 AppKit 对宽度。mac 壳 `candidates/bitmap/` 贴位图，`[general] renderer = "system"` 切回 AppKit 绘制
 （过渡期退路，偏好设置「候选窗口」页可选）；`[general] font` 是候选窗字族名（空为系统字体，`bitmap/font_files.rs` 用 CoreText 按字族名找文件只加载那几个，没装就回系统字体；
-设置页 `preferences/font_picker/` 是搜索框 + 列表）；`[general] font_size` 是候选词字号（12–28，缺省 16 = `DEFAULT_TEXT_SIZE`），`Theme::with_text_size` 让译文与序号字号、三者行高同比缩放（行高向上取整）。设计与验收见 `docs/design/rendering.md`。
+设置页 `preferences/font_picker/` 是搜索框 + 列表）；`[general] font_size` 是候选词字号（12–28，缺省 16 = `DEFAULT_TEXT_SIZE`），`Theme::with_text_size` 让译文与序号字号、三者行高同比缩放（行高向上取整）；`[general] color_scheme` 选配色预设（`Palette::blue` 等，各有浅深两版），`background_color` / `highlight_color` 经 `Palette::with_custom` 覆盖，字色按底色亮度自动配（`Palette::from_colors`）。设计与验收见 `docs/design/rendering.md`。
 
 ## apps/cli
 

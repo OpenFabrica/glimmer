@@ -1,12 +1,20 @@
-//! 「候选窗口」页：外观、排布、渲染引擎、字体、文字大小、拼音显示位置、悬浮状态条。
+//! 「候选窗口」页：外观、配色、自定义颜色、排布、渲染引擎、字体、文字大小、拼音显示位置、悬浮状态条。
 
 use glimmer_platform::{
-    CandidateRenderer, LayoutMode, MAX_FONT_SIZE, MIN_FONT_SIZE, PreeditMode, ThemeMode,
+    CandidateRenderer, ColorScheme, LayoutMode, MAX_FONT_SIZE, MIN_FONT_SIZE, PreeditMode,
+    ThemeMode,
 };
 use windows_reactor::*;
 
 use crate::panel::controls::{field, page};
 use crate::panel::{Message, Settings};
+
+/// 「背景颜色」框下面的说明。
+const BACKGROUND_NOTE: &str = "留空用配色方案的颜色，格式 #RRGGBB；只对微明渲染器生效。";
+
+/// 「高亮颜色」框下面的说明：高亮底色可以带不透明度。
+const HIGHLIGHT_NOTE: &str =
+    "留空用配色方案的颜色，格式 #RRGGBB，也可写 #RRGGBBAA 带不透明度；只对微明渲染器生效。";
 
 /// 枚举下拉：按 `label()` 列项，选中 `current`（找不到取 0）。
 fn mode_combo<T: PartialEq + Copy>(
@@ -21,12 +29,21 @@ fn mode_combo<T: PartialEq + Copy>(
         .on_selection_changed(callback)
 }
 
+/// 画「候选窗口」页；颜色框敲到一半时显示草稿，不然显示配置里的值。
 pub(crate) fn view(settings: &Settings, context: &mut ViewContext<Settings>) -> View {
     let g = &settings.config.general;
     let font_text = settings
         .font_query
         .clone()
         .unwrap_or_else(|| g.font.clone());
+    let background_text = settings
+        .background_draft
+        .clone()
+        .unwrap_or_else(|| g.background_color.clone());
+    let highlight_text = settings
+        .highlight_draft
+        .clone()
+        .unwrap_or_else(|| g.highlight_color.clone());
     let query = font_text.to_lowercase();
     let suggestions: Vec<String> = settings
         .families
@@ -44,6 +61,34 @@ pub(crate) fn view(settings: &Settings, context: &mut ViewContext<Settings>) -> 
                 ThemeMode::label,
                 context.callback(Message::Theme),
             ),
+        ),
+        field(
+            "配色",
+            "浅色、深色两版跟着外观切换；只对微明渲染器生效。",
+            mode_combo(
+                &ColorScheme::ALL,
+                g.color_scheme,
+                ColorScheme::label,
+                context.callback(Message::ColorScheme),
+            ),
+        ),
+        field(
+            "背景颜色",
+            BACKGROUND_NOTE,
+            TextBox::new()
+                .width(160.0)
+                .text(background_text)
+                .placeholder_text("#RRGGBB")
+                .on_text_changed(context.callback(Message::BackgroundColor)),
+        ),
+        field(
+            "高亮颜色",
+            HIGHLIGHT_NOTE,
+            TextBox::new()
+                .width(160.0)
+                .text(highlight_text)
+                .placeholder_text("#RRGGBB")
+                .on_text_changed(context.callback(Message::HighlightColor)),
         ),
         field(
             "排布",

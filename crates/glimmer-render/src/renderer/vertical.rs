@@ -64,8 +64,14 @@ impl Renderer {
         let text_x = left + m.padding() + columns.index_width + m.column_gap();
         let annotation_x = text_x + columns.text_width + m.column_gap();
         let text_height = m.px(m.theme.text_font.line_height);
+        // 高亮行整行压在高亮底色上，序号、候选词、译文都换成高亮配色（蓝底白字一类）
+        let highlighted_theme = m.theme.on_highlight();
+        let highlighted = Metrics {
+            theme: &highlighted_theme,
+            scale: m.scale,
+        };
         for (i, row) in frame.rows.iter().enumerate() {
-            if Some(i) == frame.highlighted {
+            let rm = if Some(i) == frame.highlighted {
                 self.fill_highlight(
                     canvas,
                     m,
@@ -74,20 +80,23 @@ impl Renderer {
                     content_width - m.padding(),
                     columns.row_height,
                 );
-            }
+                &highlighted
+            } else {
+                m
+            };
             let top = y + m.row_padding();
             let small_offset = m.small_offset(text_height);
             self.draw_text(
                 canvas,
                 &row.index,
-                &m.index_style(),
+                &rm.index_style(),
                 left + m.padding(),
                 top + small_offset,
             );
-            self.draw_word(canvas, m, row, text_x, top, text_height);
+            self.draw_word(canvas, rm, row, text_x, top, text_height);
             let mut x = annotation_x;
             for (segment, tone) in &row.annotation {
-                let style = m.annotation_style(m.tone_color(*tone));
+                let style = rm.annotation_style(rm.tone_color(*tone));
                 x += self.draw_text(canvas, segment, &style, x, top + small_offset);
             }
             y += columns.row_height;

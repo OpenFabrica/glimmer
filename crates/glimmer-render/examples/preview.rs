@@ -7,8 +7,8 @@ use std::time::Instant;
 
 use clap::Parser;
 use glimmer_render::{
-    FontLibrary, Frame, Layout, Preedit, PreeditSegment, PreeditStyle, Renderer, Row, Shadow,
-    StatusCell, Theme, Tone,
+    FontLibrary, Frame, Layout, Palette, Preedit, PreeditSegment, PreeditStyle, Renderer, Row,
+    Shadow, StatusCell, Theme, Tone,
 };
 
 #[derive(Parser)]
@@ -110,6 +110,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 elapsed,
                 path.display()
             );
+        }
+    }
+
+    // 配色方案：每套浅 / 深各画竖排与横排两张，看高亮上的字色与背景搭不搭
+    type Scheme = (&'static str, fn(bool) -> Palette);
+    let schemes: [Scheme; 4] = [
+        ("blue", Palette::blue),
+        ("paper", Palette::paper),
+        ("rose", Palette::rose),
+        ("mono", Palette::mono),
+    ];
+    for (name, palette) in schemes {
+        for (shade, dark) in [("light", false), ("dark", true)] {
+            let theme = Theme::with_palette(palette(dark));
+            for (scene, frame, layout) in &scenes[..2] {
+                let rendered =
+                    renderer.render(frame, *layout, &theme, args.scale, shadow.as_ref())?;
+                let path = args.out.join(format!("scheme-{name}-{shade}-{scene}.png"));
+                rendered.pixmap.save_png(&path)?;
+                println!("{}", path.display());
+            }
         }
     }
 

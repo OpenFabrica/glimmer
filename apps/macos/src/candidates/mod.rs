@@ -2,6 +2,7 @@
 
 mod bitmap;
 mod cloud_icon;
+mod colors;
 mod frame;
 mod preedit;
 mod row;
@@ -10,6 +11,7 @@ mod view;
 mod window;
 
 pub(crate) use bitmap::available_families;
+pub use colors::CandidateColors;
 pub use frame::Frame;
 pub use preedit::Preedit;
 pub use row::Row;

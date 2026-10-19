@@ -15,6 +15,7 @@ use objc2::rc::Retained;
 use objc2_app_kit::{NSBitmapImageRep, NSCalibratedRGBColorSpace, NSCompositingOperation, NSImage};
 use objc2_foundation::{NSPoint, NSRect, NSSize};
 
+use super::colors::CandidateColors;
 use super::frame::Frame;
 
 pub struct BitmapPainter {
@@ -44,12 +45,15 @@ pub struct BitmapPainter {
 
     /// 配置里的候选词字号（点，`[general] font_size`），下一帧起替换 `text_size`。
     next_text_size: f32,
+
+    /// 配色方案与自定义颜色。
+    colors: CandidateColors,
 }
 
 impl BitmapPainter {
-    /// `font` 是用户选的字族名，空为系统字体；没装就回到系统字体。`text_size` 是候选词字号（点）。
+    /// `font` 是用户选的字族名，空为系统字体；没装就回到系统字体。`text_size` 是候选词字号（点），`colors` 是配色。
     /// 字体库加载失败返回 `None`，调用方退回旧路径。
-    pub fn new(font: &str, text_size: f32) -> Option<Self> {
+    pub fn new(font: &str, text_size: f32, colors: CandidateColors) -> Option<Self> {
         let started = std::time::Instant::now();
         let font = font.trim();
         let library = if font.is_empty() {
@@ -83,7 +87,19 @@ impl BitmapPainter {
             size: NSSize::ZERO,
             text_size,
             next_text_size: text_size,
+            colors,
         })
+    }
+
+    /// 换配色：不改窗口尺寸，画过就当场按新颜色重画一遍，调用方再让视图重贴。
+    pub fn set_colors(&mut self, colors: CandidateColors) {
+        if self.colors == colors {
+            return;
+        }
+        self.colors = colors;
+        if self.image.is_some() {
+            self.repaint();
+        }
     }
 
     /// 换候选词字号：只记下，下一帧（`set_frame`）按新字号画并给出新的窗口尺寸。
@@ -138,12 +154,8 @@ impl BitmapPainter {
 
     /// 按当前外观、倍数与字号把最近一帧画成位图，并记下窗口尺寸。
     fn repaint(&mut self) {
-        let theme = if self.dark {
-            Theme::dark()
-        } else {
-            Theme::light()
-        }
-        .with_text_size(self.text_size);
+        let theme =
+            Theme::with_palette(self.colors.palette(self.dark)).with_text_size(self.text_size);
         let started = std::time::Instant::now();
         let rendered =
             match self

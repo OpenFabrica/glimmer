@@ -112,6 +112,13 @@
 间距、圆角、云朵图标不跟着变。mac 壳 `BitmapPainter::set_text_size` 只记下、下一帧 `set_frame` 才换（外观变了 `draw` 重画当前帧时窗口还是旧尺寸）；Windows 经 `RenderSettings::font_size` 送到 UI 线程，只换字号不重建字体库，悬浮状态条保持缺省字号。
 AppKit / GDI 旧路径与 Linux（Fcitx5 / IBus 自己画候选）不管字号。已知差异：字号超过 20 pt 时 CoreText 会换 Display 档 opsz，我们的 opsz 补丁仍是全局 17，大字号下英文比原生略宽；要对齐得按上一节说的把字体实例缓存按字号分键。
 
+配色（2026-10-19）：`[general] color_scheme`（`default` / `blue` / `paper` / `rose` / `mono`，平台层 `ColorScheme`）选一套预设，`background_color` / `highlight_color`（`#RRGGBB`，高亮可带 alpha）覆盖其中一项。
+预设只定背景与高亮两个颜色，各有浅深两版（`theme/palette/preset.rs`）；`Palette::from_colors` 按背景亮度套浅色或深色那套字色，再按高亮叠到背景上的亮度选高亮条上的字色 `highlight_text`
+（深字配深高亮 → 白字；浅字配浅高亮 → 深字；深底上高亮比背景亮出 0.15 以上 → 纯白一系，否则深色那套序号灰压不住实心蓝）。缺省两套经这条规则配出来与原值相同，有测试守着。
+渲染器画高亮那一项时换 `Palette::on_highlight()`：正文用 `highlight_text`，序号、译文、词性按比例降不透明度。主题的文字 gamma 也按背景亮度取（深底 0.75、浅底 0.85）。
+mac 壳 `candidates/colors.rs` 把配置换成 `Palette`，`BitmapPainter::set_colors` 当场重画（不改尺寸）；Windows 经 `RenderSettings` 送到 UI 线程（`ui/painter/colors.rs`），候选窗与悬浮状态条都用。
+自定义颜色写错按没写处理并记警告。AppKit / GDI 旧路径与 Linux 不管配色。`examples/preview.rs` 会把每套配色的浅深、竖横排各出一张。
+
 **结论**：四条都过，mac 上位图渲染器可以替换 AppKit 绘制；Windows 半边见下节。下一步做主题 TOML，稳定一版后删 AppKit / GDI 旧路径。
 主题以后要放图片 / 动图 / 花边：渲染器输出就是一张位图，装饰只是多叠几层，不用换底子。
 

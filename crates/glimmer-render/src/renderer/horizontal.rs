@@ -85,10 +85,16 @@ impl Renderer {
         let top = y + m.row_padding();
         let text_height = m.px(m.theme.text_font.line_height);
         let inset = m.px(HIGHLIGHT_INSET);
+        // 高亮那一项压在高亮底色上，序号与候选词换成高亮配色（蓝底白字一类）
+        let highlighted_theme = m.theme.on_highlight();
+        let highlighted = Metrics {
+            theme: &highlighted_theme,
+            scale: m.scale,
+        };
         let mut x = left + m.padding() + inset;
         for (i, (row, item)) in frame.rows.iter().zip(&items).enumerate() {
             let item_width = item.index_width + m.px(INDEX_GAP) + item.text_width;
-            if Some(i) == frame.highlighted {
+            let rm = if Some(i) == frame.highlighted {
                 self.fill_highlight(
                     canvas,
                     m,
@@ -97,17 +103,20 @@ impl Renderer {
                     item_width + inset * 2.0,
                     row_height,
                 );
-            }
+                &highlighted
+            } else {
+                m
+            };
             self.draw_text(
                 canvas,
                 &row.index,
-                &m.index_style(),
+                &rm.index_style(),
                 x,
                 top + m.small_offset(text_height),
             );
             self.draw_word(
                 canvas,
-                m,
+                rm,
                 row,
                 x + item.index_width + m.px(INDEX_GAP),
                 top,

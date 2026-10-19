@@ -1,8 +1,8 @@
 //! 根组件的 Reactor 生命周期：建状态、按消息落盘、画左侧导航 + 当前页。
 
 use glimmer_platform::{
-    CandidateRenderer, Config, DEFAULT_ENGLISH_CANDIDATES_OFF_WINDOWS, LayoutMode, LogLevel,
-    MAX_FONT_SIZE, MIN_FONT_SIZE, PreeditMode, PunctuationMode, ThemeMode,
+    CandidateRenderer, ColorScheme, Config, DEFAULT_ENGLISH_CANDIDATES_OFF_WINDOWS, LayoutMode,
+    LogLevel, MAX_FONT_SIZE, MIN_FONT_SIZE, PreeditMode, PunctuationMode, ThemeMode,
 };
 use windows_reactor::*;
 
@@ -44,6 +44,8 @@ impl Component for Settings {
             dictionary_status: String::new(),
             families: glimmer_render::system_fonts::families(),
             font_query: None,
+            background_draft: None,
+            highlight_draft: None,
         };
         // 开着自动检查且 12 小时内没查过：设置程序一打开就在后台查一次，有新版本「关于」页会显示
         if settings.config.update.check && about::check_due() {
@@ -111,6 +113,15 @@ impl Component for Settings {
             // 候选窗口页
             Message::Theme(Some(i)) if i < ThemeMode::ALL.len() => {
                 self.save("general", "theme", ThemeMode::ALL[i].key());
+            }
+            Message::ColorScheme(Some(i)) if i < ColorScheme::ALL.len() => {
+                self.save("general", "color_scheme", ColorScheme::ALL[i].key());
+            }
+            Message::BackgroundColor(text) => {
+                self.background_draft = self.save_color("background_color", &text);
+            }
+            Message::HighlightColor(text) => {
+                self.highlight_draft = self.save_color("highlight_color", &text);
             }
             Message::Layout(Some(i)) if i < LayoutMode::ALL.len() => {
                 self.save("general", "layout", LayoutMode::ALL[i].key());

@@ -48,15 +48,22 @@ pub struct Theme {
 impl Theme {
     /// 浅色，对齐 macOS 系统外观。
     pub fn light() -> Self {
-        Self::with_palette(Palette::light(), 0.85)
+        Self::with_palette(Palette::light())
     }
 
     /// 深色，对齐 macOS 系统外观。
     pub fn dark() -> Self {
-        Self::with_palette(Palette::dark(), 0.75)
+        Self::with_palette(Palette::dark())
     }
 
-    fn with_palette(colors: Palette, text_gamma: f32) -> Self {
+    /// 用一套配色（配色方案或自定义颜色配出来的）建主题，字体与间距是缺省的。
+    /// 文字 gamma 按背景深浅取：深底上 CoreText 的加深更明显，要更小的值才对得上。
+    pub fn with_palette(colors: Palette) -> Self {
+        let text_gamma = if colors.background.luminance() < 0.5 {
+            0.75
+        } else {
+            0.85
+        };
         Self {
             // 行高取 AppKit 系统字体在这几个字号下 NSAttributedString.size() 的高度
             text_font: FontSpec::new(DEFAULT_TEXT_SIZE, 19.0),
@@ -69,6 +76,14 @@ impl Theme {
             corner_radius: 8.0,
             max_rows: 9,
             text_gamma,
+        }
+    }
+
+    /// 画高亮那一项用的主题：只换配色，见 [`Palette::on_highlight`]。
+    pub(crate) fn on_highlight(&self) -> Self {
+        Self {
+            colors: self.colors.on_highlight(),
+            ..self.clone()
         }
     }
 

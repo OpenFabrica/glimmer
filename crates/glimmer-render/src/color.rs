@@ -31,6 +31,51 @@ impl Color {
         }
     }
 
+    /// 解析 `#RRGGBB` / `#RRGGBBAA`（`#` 可省、大小写都行）；格式不对返回 `None`。配置文件里的自定义颜色用它。
+    pub fn from_hex(text: &str) -> Option<Self> {
+        let hex = text.trim();
+        let hex = hex.strip_prefix('#').unwrap_or(hex);
+        if !matches!(hex.len(), 6 | 8) || !hex.is_ascii() {
+            return None;
+        }
+        let byte = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).ok();
+        let alpha = if hex.len() == 8 { byte(6)? } else { 255 };
+        Some(Self::rgba(byte(0)?, byte(2)?, byte(4)?, alpha))
+    }
+
+    /// 写成 `#RRGGBB`，不透明时不带 alpha，否则 `#RRGGBBAA`；与 [`Self::from_hex`] 互逆。
+    pub fn to_hex(self) -> String {
+        if self.a == 255 {
+            format!("#{:02X}{:02X}{:02X}", self.r, self.g, self.b)
+        } else {
+            format!("#{:02X}{:02X}{:02X}{:02X}", self.r, self.g, self.b, self.a)
+        }
+    }
+
+    /// 换掉不透明度。
+    pub const fn with_alpha(self, a: u8) -> Self {
+        Self { a, ..self }
+    }
+
+    /// 叠在不透明的 `under` 上之后看到的颜色（结果不透明）。
+    pub fn over(self, under: Self) -> Self {
+        let blend = |top: u8, bottom: u8| {
+            let a = u32::from(self.a);
+            ((u32::from(top) * a + u32::from(bottom) * (255 - a) + 127) / 255) as u8
+        };
+        Self::rgb(
+            blend(self.r, under.r),
+            blend(self.g, under.g),
+            blend(self.b, under.b),
+        )
+    }
+
+    /// 亮度 0–1（Rec. 709 系数直接乘 sRGB 值，不做线性化）：只用来分「深底配浅字 / 浅底配深字」，够用。
+    pub fn luminance(self) -> f32 {
+        (0.2126 * f32::from(self.r) + 0.7152 * f32::from(self.g) + 0.0722 * f32::from(self.b))
+            / 255.0
+    }
+
     pub(crate) fn to_skia(self) -> tiny_skia::Color {
         tiny_skia::Color::from_rgba8(self.r, self.g, self.b, self.a)
     }
@@ -69,5 +114,28 @@ mod tests {
         assert_eq!((half.red(), half.alpha()), (0, 128));
         assert_eq!(mul_u8(255, 255), 255);
         assert_eq!(mul_u8(0, 255), 0);
+    }
+
+    #[test]
+    fn parses_and_writes_hex() {
+        assert_eq!(Color::from_hex("#007AFF"), Some(Color::rgb(0, 122, 255)));
+        assert_eq!(Color::from_hex(" 007aff "), Some(Color::rgb(0, 122, 255)));
+        assert_eq!(
+            Color::from_hex("#B0CE7D7F"),
+            Some(Color::rgba(176, 206, 125, 127))
+        );
+        for bad in ["", "#", "#12345", "#1234567", "#GG0000", "#日本語"] {
+            assert_eq!(Color::from_hex(bad), None, "{bad}");
+        }
+        assert_eq!(Color::rgb(0, 122, 255).to_hex(), "#007AFF");
+        assert_eq!(Color::rgba(176, 206, 125, 127).to_hex(), "#B0CE7D7F");
+    }
+
+    #[test]
+    fn blends_over_opaque_background() {
+        let white = Color::rgb(255, 255, 255);
+        assert_eq!(Color::rgb(10, 20, 30).over(white), Color::rgb(10, 20, 30));
+        assert_eq!(Color::gray(0, 0).over(white), white);
+        assert_eq!(Color::gray(0, 128).over(white), Color::rgb(127, 127, 127));
     }
 }

@@ -49,6 +49,12 @@ pub(crate) struct Settings {
 
     /// 「字体」框里正在敲的文字；`None` 显示配置里的值。
     font_query: Option<String>,
+
+    /// 「背景颜色」框里还没敲完（不是合法颜色）的文字；`None` 显示配置里的值。
+    background_draft: Option<String>,
+
+    /// 「高亮颜色」框里还没敲完的文字；`None` 显示配置里的值。
+    highlight_draft: Option<String>,
 }
 
 impl Settings {
@@ -85,6 +91,17 @@ impl Settings {
             return;
         }
         self.reload();
+    }
+
+    /// 颜色框的文字变了：空或合法颜色就落盘并清掉草稿，否则只记成草稿（敲到一半不写坏配置）。
+    fn save_color(&mut self, key: &str, text: &str) -> Option<String> {
+        let text = text.trim();
+        if text.is_empty() || glimmer_render::Color::from_hex(text).is_some() {
+            self.save("general", key, text);
+            None
+        } else {
+            Some(text.to_owned())
+        }
     }
 
     fn reload(&mut self) {

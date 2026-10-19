@@ -36,6 +36,12 @@ pub(crate) enum Message {
 
     // 候选窗口页
     Theme(Option<usize>),
+    /// `[general] color_scheme`：下标对 `ColorScheme::ALL`。
+    ColorScheme(Option<usize>),
+    /// 背景颜色框里的文字变了：空或合法的 `#RRGGBB` / `#RRGGBBAA` 就落盘。
+    BackgroundColor(String),
+    /// 高亮颜色框里的文字变了：同上。
+    HighlightColor(String),
     Layout(Option<usize>),
     Preedit(Option<usize>),
     Renderer(Option<usize>),

@@ -20,6 +20,7 @@ use objc2_foundation::{
 
 use super::bitmap::BitmapPainter;
 use super::cloud_icon::CloudIcon;
+use super::colors::CandidateColors;
 use super::frame::Frame;
 use super::preedit::Preedit;
 use super::preedit::PreeditStyle;
@@ -48,6 +49,9 @@ pub struct Ivars {
 
     /// 候选词字号（点，配置 `[general] font_size`），只对位图渲染器生效。
     font_size: Cell<f32>,
+
+    /// 配色方案与自定义颜色，只对位图渲染器生效。
+    colors: Cell<CandidateColors>,
 }
 
 /// preedit 光标的宽度。
@@ -124,6 +128,7 @@ impl CandidateView {
             bitmap: RefCell::new(None),
             font: RefCell::new(String::new()),
             font_size: Cell::new(glimmer_render::DEFAULT_TEXT_SIZE),
+            colors: Cell::new(CandidateColors::default()),
         });
         unsafe { msg_send![super(this), initWithFrame: NSRect::ZERO] }
     }
@@ -136,7 +141,11 @@ impl CandidateView {
         *self.ivars().font.borrow_mut() = font.to_owned();
         let mut bitmap = self.ivars().bitmap.borrow_mut();
         if bitmap.is_some() {
-            *bitmap = BitmapPainter::new(font, self.ivars().font_size.get());
+            *bitmap = BitmapPainter::new(
+                font,
+                self.ivars().font_size.get(),
+                self.ivars().colors.get(),
+            );
             drop(bitmap);
             self.setNeedsDisplay(true);
         }
@@ -150,13 +159,27 @@ impl CandidateView {
         }
     }
 
+    /// 配色方案与自定义颜色。渲染器在用就当场重画；AppKit 绘制路径不管配色。
+    pub fn set_colors(&self, colors: CandidateColors) {
+        if self.ivars().colors.replace(colors) == colors {
+            return;
+        }
+        if let Some(bitmap) = &mut *self.ivars().bitmap.borrow_mut() {
+            bitmap.set_colors(colors);
+            self.setNeedsDisplay(true);
+        }
+    }
+
     /// 微明渲染器 / 系统绘制。渲染器字体库加载失败就留在系统绘制。
     pub fn set_renderer(&self, renderer: CandidateRenderer) {
         let mut bitmap = self.ivars().bitmap.borrow_mut();
         match renderer {
             CandidateRenderer::Glimmer if bitmap.is_none() => {
-                *bitmap =
-                    BitmapPainter::new(&self.ivars().font.borrow(), self.ivars().font_size.get());
+                *bitmap = BitmapPainter::new(
+                    &self.ivars().font.borrow(),
+                    self.ivars().font_size.get(),
+                    self.ivars().colors.get(),
+                );
             }
             CandidateRenderer::System if bitmap.is_some() => {
                 tracing::info!("候选窗切回 AppKit 绘制");

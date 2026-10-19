@@ -2,11 +2,12 @@
 //! 以及把控件接到 [`PreferencesTarget`] 的 `changed:` 上。页面文件只描述「放什么」，不重复这些细节。
 
 use glimmer_core::Language;
+use glimmer_render::Color;
 use objc2::rc::Retained;
 use objc2::{MainThreadMarker, sel};
 use objc2_app_kit::{
-    NSButton, NSColor, NSControl, NSControlStateValueOff, NSControlStateValueOn, NSFont,
-    NSPopUpButton, NSSecureTextField, NSTextAlignment, NSTextField,
+    NSButton, NSColor, NSColorSpace, NSColorWell, NSControl, NSControlStateValueOff,
+    NSControlStateValueOn, NSFont, NSPopUpButton, NSSecureTextField, NSTextAlignment, NSTextField,
 };
 use objc2_foundation::{NSArray, NSRect, NSString};
 
@@ -238,6 +239,46 @@ pub(super) fn button(
     };
     button.setTag(setting.tag());
     button
+}
+
+/// 取色器：改了颜色发 action。不连续发：拖着色盘时每一下都写配置文件并重载整份配置，太重。
+pub(super) fn color_well(
+    mtm: MainThreadMarker,
+    setting: Setting,
+    target: &PreferencesTarget,
+) -> Retained<NSColorWell> {
+    let well = NSColorWell::initWithFrame(mtm.alloc(), NSRect::ZERO);
+    well.setContinuous(false);
+    wire(&well, setting, target);
+    well
+}
+
+/// 取色器当前颜色换成 sRGB 的 `#RRGGBB`（不透明度不是 1 时 `#RRGGBBAA`）；换不了色彩空间（图案色）返回 `None`。
+pub(super) fn well_hex(well: &NSColorWell) -> Option<String> {
+    let color = well
+        .color()
+        .colorUsingColorSpace(&NSColorSpace::sRGBColorSpace())?;
+    let byte = |component: f64| (component.clamp(0.0, 1.0) * 255.0).round() as u8;
+    Some(
+        Color::rgba(
+            byte(color.redComponent()),
+            byte(color.greenComponent()),
+            byte(color.blueComponent()),
+            byte(color.alphaComponent()),
+        )
+        .to_hex(),
+    )
+}
+
+/// 把渲染器的颜色显示到取色器上（不发 action）。
+pub(super) fn set_well_color(well: &NSColorWell, color: Color) {
+    let channel = |value: u8| f64::from(value) / 255.0;
+    well.setColor(&NSColor::colorWithSRGBRed_green_blue_alpha(
+        channel(color.r),
+        channel(color.g),
+        channel(color.b),
+        channel(color.a),
+    ));
 }
 
 /// 可编辑单行文本框：回车或失焦时发 action。

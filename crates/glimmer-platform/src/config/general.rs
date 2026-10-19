@@ -2,7 +2,7 @@ use glimmer_core::{PunctuationMode, ShuangpinScheme, WubiVariant};
 use serde::{Deserialize, Serialize};
 
 use super::scheme::{Scheme, scheme_label};
-use super::{CandidateRenderer, LayoutMode, LogLevel, PreeditMode, ThemeMode};
+use super::{CandidateRenderer, ColorScheme, LayoutMode, LogLevel, PreeditMode, ThemeMode};
 
 /// 每页最多几个候选：数字键只有 1–9。
 pub const MAX_PAGE_SIZE: usize = 9;
@@ -45,6 +45,17 @@ pub struct GeneralConfig {
 
     /// 候选窗口外观。
     pub theme: ThemeMode,
+
+    /// 候选窗口配色方案，浅色 / 深色两版跟着 `theme` 切换。只对微明渲染器生效。
+    pub color_scheme: ColorScheme,
+
+    /// 自定义候选窗口背景色，`#RRGGBB`；空串用配色方案的。设了就不分浅色深色，字色按背景深浅自动选。
+    /// 只对微明渲染器生效，写错了按空串处理。
+    pub background_color: String,
+
+    /// 自定义当前候选的高亮底色，`#RRGGBB` 或带不透明度的 `#RRGGBBAA`；空串用配色方案的。
+    /// 高亮上的字色按底色深浅自动选。只对微明渲染器生效，写错了按空串处理。
+    pub highlight_color: String,
 
     /// 候选窗口竖排 / 横排。
     pub layout: LayoutMode,
@@ -125,6 +136,9 @@ impl Default for GeneralConfig {
             page_size: MAX_PAGE_SIZE,
             page_keys: PAGE_KEY_OPTIONS[0].to_owned(),
             theme: ThemeMode::default(),
+            color_scheme: ColorScheme::default(),
+            background_color: String::new(),
+            highlight_color: String::new(),
             layout: LayoutMode::default(),
             renderer: CandidateRenderer::default(),
             font: String::new(),

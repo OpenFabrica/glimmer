@@ -192,6 +192,22 @@ impl Host {
                     self.settings.set_value("general", "theme", theme.key());
                 }
             }
+            (Setting::ColorScheme, SettingValue::Index(index)) => {
+                if let Some(scheme) = glimmer_platform::ColorScheme::ALL.get(index) {
+                    self.settings
+                        .set_value("general", "color_scheme", scheme.key());
+                }
+            }
+            (Setting::BackgroundColor, SettingValue::Text(hex)) => {
+                self.settings.set_value("general", "background_color", hex);
+            }
+            (Setting::HighlightColor, SettingValue::Text(hex)) => {
+                self.settings.set_value("general", "highlight_color", hex);
+            }
+            (Setting::ResetColors, _) => {
+                self.settings.set_value("general", "background_color", "");
+                self.settings.set_value("general", "highlight_color", "");
+            }
             (Setting::Renderer, SettingValue::Index(index)) => {
                 if let Some(renderer) = CandidateRenderer::ALL.get(index) {
                     self.settings

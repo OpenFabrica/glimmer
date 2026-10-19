@@ -8,6 +8,7 @@ pub(super) use watch::ConfigWatch;
 
 use super::init::load_glossary;
 use super::*;
+use crate::candidates::CandidateColors;
 
 impl Host {
     /// 把当前配置推给 Engine 与界面：模糊音 / 模式键 / 翻页 / 外观直接设；学习语言变了换释义表；
@@ -54,6 +55,8 @@ impl Host {
         self.window.set_layout(config.general.layout);
         self.window.set_font_size(config.general.font_size() as f32);
         self.window.set_font(&config.general.font);
+        self.window
+            .set_colors(CandidateColors::from_config(&config.general));
         self.window.set_renderer(config.general.renderer);
         self.apply_learning_language(&config.general);
         if self.input_log_enabled != Some(config.general.input_log) {

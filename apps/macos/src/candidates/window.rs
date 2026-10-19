@@ -10,6 +10,7 @@ use objc2_app_kit::{
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize};
 
+use super::colors::CandidateColors;
 use super::frame::Frame;
 use super::theme::Theme;
 use super::view::CandidateView;
@@ -132,6 +133,11 @@ impl CandidateWindow {
     /// 候选词字号（点），只对微明渲染器生效。下一帧生效。
     pub fn set_font_size(&self, size: f32) {
         self.view.set_font_size(size);
+    }
+
+    /// 配色方案与自定义颜色，只对微明渲染器生效。当场生效。
+    pub fn set_colors(&self, colors: CandidateColors) {
+        self.view.set_colors(colors);
     }
 
     pub fn max_rows(&self) -> usize {

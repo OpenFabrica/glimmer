@@ -23,7 +23,7 @@ mod target;
 mod window;
 
 use objc2::runtime::AnyObject;
-use objc2_app_kit::{NSButton, NSControlStateValueOn, NSPopUpButton, NSTextField};
+use objc2_app_kit::{NSButton, NSColorWell, NSControlStateValueOn, NSPopUpButton, NSTextField};
 
 pub use file_dialog::{choose_dictionary_file, choose_text_sources};
 pub use key_recorder::KeyRecorder;
@@ -52,6 +52,13 @@ pub fn setting_from_sender(sender: Option<&AnyObject>) -> Option<(Setting, Setti
     if let Some(button) = sender.downcast_ref::<NSButton>() {
         let on = button.state() == NSControlStateValueOn;
         return Some((Setting::from_tag(button.tag())?, SettingValue::Bool(on)));
+    }
+    // 取色器的值换成配置里的 `#RRGGBB`
+    if let Some(well) = sender.downcast_ref::<NSColorWell>() {
+        return Some((
+            Setting::from_tag(well.tag())?,
+            SettingValue::Text(controls::well_hex(well)?),
+        ));
     }
     if let Some(field) = sender.downcast_ref::<NSTextField>() {
         let text = field.stringValue().to_string();

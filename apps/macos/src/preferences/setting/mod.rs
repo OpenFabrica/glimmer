@@ -38,6 +38,18 @@ pub enum Setting {
     /// `[general] renderer`，弹出菜单：微明渲染器 / 系统绘制。
     Renderer,
 
+    /// `[general] color_scheme`，弹出菜单：配色方案。
+    ColorScheme,
+
+    /// `[general] background_color`，取色器，值是 `#RRGGBB`。
+    BackgroundColor,
+
+    /// `[general] highlight_color`，取色器，值是 `#RRGGBB`。
+    HighlightColor,
+
+    /// 「恢复配色的颜色」按钮：清掉自定义背景色与高亮底色。
+    ResetColors,
+
     /// `[general] font`，字体列表选中的字族名；「系统默认」为系统字体。
     Font,
 
@@ -280,6 +292,10 @@ impl Setting {
             Self::Renderer => 46,
             Self::Font => 47,
             Self::FontSize => 55,
+            Self::ColorScheme => 63,
+            Self::BackgroundColor => 64,
+            Self::HighlightColor => 65,
+            Self::ResetColors => 66,
             Self::SystemTextReplacements => 50,
             Self::UpdateCheck => 58,
             Self::CheckUpdate => 59,
@@ -299,6 +315,10 @@ impl Setting {
             46 => Self::Renderer,
             47 => Self::Font,
             55 => Self::FontSize,
+            63 => Self::ColorScheme,
+            64 => Self::BackgroundColor,
+            65 => Self::HighlightColor,
+            66 => Self::ResetColors,
             5 => Self::ExpressionKey,
             6 => Self::QuestionKey,
             48 => Self::QuestionMark,
@@ -384,6 +404,10 @@ mod tests {
             Setting::Renderer,
             Setting::Font,
             Setting::FontSize,
+            Setting::ColorScheme,
+            Setting::BackgroundColor,
+            Setting::HighlightColor,
+            Setting::ResetColors,
             Setting::ExpressionKey,
             Setting::QuestionKey,
             Setting::CloudEnabled,

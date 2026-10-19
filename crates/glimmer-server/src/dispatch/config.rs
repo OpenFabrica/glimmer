@@ -1,6 +1,7 @@
 use glimmer_platform::protocol::KeyModifiers;
 use glimmer_platform::{
-    AppsConfig, CandidateRenderer, Config, KeyCombo, LayoutMode, PreeditMode, Scheme, ThemeMode,
+    AppsConfig, CandidateRenderer, ColorScheme, Config, KeyCombo, LayoutMode, PreeditMode, Scheme,
+    ThemeMode,
 };
 
 use super::RenderSettings;
@@ -28,6 +29,15 @@ pub struct RouterConfig {
 
     /// 候选窗口字号（点，`[general] font_size`，已夹到 12–28）；只对微明渲染器生效。
     pub font_size: u32,
+
+    /// 候选窗口配色方案（`[general] color_scheme`）；只对微明渲染器生效。
+    pub color_scheme: ColorScheme,
+
+    /// 自定义背景色（`[general] background_color`，已去首尾空白），空串用配色方案的；只对微明渲染器生效。
+    pub background_color: String,
+
+    /// 自定义高亮底色（`[general] highlight_color`，已去首尾空白），空串用配色方案的；只对微明渲染器生效。
+    pub highlight_color: String,
 
     /// 拼音显示位置（`[general] preedit`）。
     pub preedit: PreeditMode,
@@ -79,6 +89,9 @@ impl RouterConfig {
             renderer: self.renderer,
             font: self.font.clone(),
             font_size: self.font_size,
+            color_scheme: self.color_scheme,
+            background_color: self.background_color.clone(),
+            highlight_color: self.highlight_color.clone(),
         }
     }
 }
@@ -93,6 +106,9 @@ impl From<&Config> for RouterConfig {
             renderer: config.general.renderer,
             font: config.general.font.trim().to_owned(),
             font_size: config.general.font_size(),
+            color_scheme: config.general.color_scheme,
+            background_color: config.general.background_color.trim().to_owned(),
+            highlight_color: config.general.highlight_color.trim().to_owned(),
             preedit: config.general.preedit,
             page_keys: config.general.page_keys(),
             english_candidates: config.general.english_candidates,

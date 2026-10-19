@@ -1,5 +1,6 @@
 mod apps;
 mod candidate_renderer;
+mod color_scheme;
 mod dictionaries;
 mod general;
 mod key_combo;
@@ -30,6 +31,7 @@ pub use apps::{
     DEFAULT_ENGLISH_CANDIDATES_OFF_MACOS, DEFAULT_ENGLISH_CANDIDATES_OFF_WINDOWS,
 };
 pub use candidate_renderer::CandidateRenderer;
+pub use color_scheme::ColorScheme;
 pub use dictionaries::{DEFAULT_DOMAINS, DictionariesConfig};
 pub use general::{
     DEFAULT_FONT_SIZE, DEFAULT_PAGE_KEYS, GeneralConfig, LEARNING_LANGUAGE_OFF, MAX_FONT_SIZE,
@@ -200,6 +202,12 @@ page_size = 9
 page_keys = "[]"
 # 候选窗口外观：system 跟随系统 / light 浅色 / dark 深色
 theme = "system"
+# 候选窗口配色：default 默认 / blue 海蓝 / paper 暖纸 / rose 樱粉 / mono 素灰；每套有浅色、深色两版，跟着 theme 切换。只对微明渲染器生效
+color_scheme = "default"
+# 自定义候选窗口背景色，写成 #RRGGBB（如 #FAF6EC，要加引号）；空为用配色的。设了就不分浅色深色，字色按背景深浅自动选
+background_color = ""
+# 自定义当前候选的高亮底色，#RRGGBB 或带不透明度的 #RRGGBBAA；空为用配色的。高亮上的字色按底色深浅自动选
+highlight_color = ""
 # 候选窗口排布：vertical 竖排 / horizontal 横排（横排只给高亮候选显示译文）
 layout = "vertical"
 # 候选窗口由谁绘制：glimmer 微明渲染器（各平台一致，主题走它）/ system 系统原生绘制（渲染器有问题时的退路）
