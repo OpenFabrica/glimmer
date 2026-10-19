@@ -30,7 +30,7 @@
 
 | 用途 | 来源 | 许可 | 备注 |
 |---|---|---|---|
-| 拼音词库（产品） | 自建，源数据在 `assets/lexicon/`：《通用规范汉字表》8105 字（政府公布的规范字表，iDvel 转录并与 shengdoushi 分级表核对）、《现代汉语常用词表（草案）》56k 词（教育部 2008，liuxilu 校对版，自带拼音）、THUOCL 11 类领域词 15.7 万（2026-09-06 起按语料次数拆开：常见的留基础词库，其余各成一本随包 `.qj`；清华 NLP，MIT） | 字表与常用词表是官方文件的转录，转录仓库未附许可证；THUOCL MIT；读音 Unihan（Unicode License v3） | `dict-convert lexicon` 生成 `dict.tsv`（20.5 万条，随仓库放 `assets/lexicon/dict.tsv`）：字与领域词读音来自 Unihan，5.6 万含多音字的领域词和 1.2 万含多音字的常用词由 LLM 标注再逐字对照 Unihan 校验（常用词表自带拼音对多音字错了 288 处：部长 chang、西藏 cang、成都 dou……，以标注为主读音、原读音降权保留），词频来自下面两份语料的统计（两遍：先按底值分词统计，再用真实词频重统计）。2026-09-05 起取代雾凇拼音（GPL-3.0 only，与本项目不兼容，已从数据目录与工具里移除） |
+| 拼音词库（产品） | 自建，源数据在 `assets/lexicon/`：《通用规范汉字表》8105 字（政府公布的规范字表，iDvel 转录并与 shengdoushi 分级表核对）、《现代汉语常用词表（草案）》56k 词（教育部 2008，liuxilu 校对版，自带拼音）、THUOCL 11 类领域词 15.7 万（2026-09-06 起按语料次数拆开：常见的留基础词库，其余各成一本随包 `.qj`；清华 NLP，MIT） | 字表转录自国务院公布的规范（国发〔2013〕23号）；常用词表转录自 2008 年出版的草案（课题组编，商务印书馆），不是正式规范；两个转录仓库都未附许可证；THUOCL MIT；读音 Unihan（Unicode License v3） | `dict-convert lexicon` 生成 `dict.tsv`（20.5 万条，随仓库放 `assets/lexicon/dict.tsv`）：字与领域词读音来自 Unihan，5.6 万含多音字的领域词和 1.2 万含多音字的常用词由 LLM 标注再逐字对照 Unihan 校验（常用词表自带拼音对多音字错了 288 处：部长 chang、西藏 cang、成都 dou……，以标注为主读音、原读音降权保留），词频来自下面两份语料的统计（两遍：先按底值分词统计，再用真实词频重统计）。2026-09-05 起取代雾凇拼音（已从数据目录与工具里移除，为什么不用见下面「许可策略」） |
 | 英文词表（产品） | 同一数据包 `05_english`：ESDB（en-wl/wordlist，MIT-like）、CSpell software-terms（MIT）、typos 误拼对照（MIT） | 均宽松，许可原文随包 | `dict-convert english` 取纯字母词 9.5 万，词频 wordfreq；误拼对照表以后可喂英文纠正。取代雾凇 en_dicts |
 | 语言模型语料 | 中文维基（HF `wikimedia/wikipedia` 20231101.zh） | CC BY-SA 4.0 | 百科体，第一人称、口语词几乎没有（去 / 累 这类词计数极低），单独用它整句会偏向地名术语；由它统计的 bigram 表按 CC BY-SA 对待 |
 | 语言模型语料 | LCCC（清华 `thu-coai/lccc`，微博对话） | MIT | 口语对话，补维基缺的日常用语；两份语料合并统计。`tools/corpus/parquet_to_text.py` 转文本，`dict-convert bigram` 统计 |
@@ -51,7 +51,20 @@
   `LICENSE`、「关于」页（`about.rs` 的 `LICENSE_NOTE`）、README 三处保持一致；pkg 里的 `license.txt` 从 `LICENSE` 拷。
 - 产品数据的源文件进 `assets/`（`assets/lexicon/` 词库源、`assets/emoji/`），带各自的许可证与署名文件；
   语料、Unihan 这类体积大或可重新下载的中间输入放仓库根目录 `data/`（gitignore），生成物在 `data/generated/`。
-  许可与本项目不兼容的数据（雾凇拼音）已不再使用，连开发测试也不用，免得产品数据被它污染。
+- 雾凇拼音不用：不随包、不当词源，选词时也不拿它当筛子或参照，免得产品数据被它污染（2026-10-19 核实，出处见各条链接）。
+  - 许可本身已经不是障碍。2026-09-05 移除它时项目还是「保留所有权利」，确实不兼容；2026-09-07 代码改成 GPL-3.0-or-later 后，
+    可以合入它的 GPL-3.0-only 数据（[FSF 兼容表](https://www.gnu.org/licenses/gpl-faq.html#AllCompatibility)），只是合并后的词库只能按 GPL-3.0-only 发布。
+  - 真正的原因是来源。雾凇 base 词库一半以上的词来自「华宇野风系统词库」，而野风词库约 96% 的词收在华宇（原紫光）拼音的官方系统词库里，
+    同词同音的词频 97.5% 完全一样，[原帖](http://bbs.pinyin.thunisoft.com/forum.php?mod=viewthread&tid=30049) 21 页没有任何授权；
+    2022-12 雾凇又并入了从华宇拼音软件里解码出来的官方词库（[#56](https://github.com/iDvel/rime-ice/issues/56)，提交 `1424517`，+61,843 行），
+    早期还收过从《现代汉语词典》第 7 版官方 app 提取的词（[#11](https://github.com/iDvel/rime-ice/issues/11)）。
+    雾凇只能授权它拥有或被允许转授的部分，上游公司没给的权利，GPL 标签补不上。
+    输入法词库在国内被当作公司资产：2007 年谷歌拼音被搜狐指控盗用搜狗词库，谷歌在官方博客道歉。
+  - 数据许可会变：本项目的数据按来源单独授权（下一条），混入雾凇后整份词库只能按 GPL-3.0-only 发布，
+    用它分词统计的语言模型算不算演绎作品也说不清。
+  - 收益有限：雾凇的大词量里很大一部分是给没有语言模型的 Rime 组句用的短语（生活中的 / 毕业后），微明靠语言模型组句用不着；
+    缺的常用词走 CC-CEDICT / jieba 白名单补（[notes/common-words.md](../notes/common-words.md)）。
+  - 用户自己用「导入词库」导入雾凇的 `.dict.yaml`、只在本机用，不受影响：GPL 对不分发的使用没有条件。
 - 数据文件不并入代码许可：每个数据源在 `assets/` 下带自己的 LICENSE 和署名文件，README 里列出。
   CC BY 只需署名；CC BY-SA 的 share-alike 只约束数据本身及其修改版，不传染到代码，
   但对 CC-CEDICT 做的任何加工（裁剪、合并 gloss）都要以 CC BY-SA 发布。
@@ -74,4 +87,4 @@
 | 五笔码表（新世纪） | GuoBinyong/wubixinshiji（郭斌勇整理，AUTHORS 声明 LGPL）/ 王永民《五笔字型大一统》新世纪整合词库 |
 | 词汇等级 | The CEFR-J Wordlist Version 1.5（Yukio Tono，Tokyo University of Foreign Studies，[cefr-j.org](http://www.cefr-j.org/download.html)）；Octanove Vocabulary Profile C1/C2（CC BY-SA 4.0）；JLPT 词表（[tanos.co.uk](http://www.tanos.co.uk/jlpt/)，CC BY；经 elzup/jlpt-word-list 整理，MIT） |
 
-各许可证原文在 `assets/` 对应目录下。雾凇拼音（GPL）已彻底移除，不要再引入。
+各许可证原文在 `assets/` 对应目录下。雾凇拼音已彻底移除，不要再引入（原因见「许可策略」）。
