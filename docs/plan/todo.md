@@ -1,7 +1,7 @@
 # TODO
 
 按「从自用到能给别人用」排。勾掉的移到 [roadmap.md](roadmap.md) 对应阶段。`★` 是当前建议的优先项。
-2026-09-18 状态：macOS 0.1.7 / Windows 0.1.0-alpha.6 / Linux 0.1.0-linux.2 已发（GitHub Release + 官网 glimmerinput.app），产品数据锁到 data-v3。
+2026-10-19 状态：macOS 0.1.10 / Windows 0.1.0-alpha.7 / Linux 0.1.0-linux.2 已发（GitHub Release + 官网 glimmerinput.app），产品数据锁到 data-v8（第二轮补充常用词，还没随任何版本发出；Linux 两版带的是 2026-09-16 冻结前的 `data` Release）。
 核心输入、翻译（中→英带音标 / 日 24.9 万词、英→中 4.5 万词、注假名、修饰键上屏译词、翻译选中文字）、英文模式候选、双拼五套 + 五笔三版、繁体输出、
 自建词库（基础 + 随包领域词库，含语料挖出的高频词与补充常用词）、多词库与导入 / 移除 / 开关、偏好设置、`.qj` 容器（启动 50 ms）、
 个人 n-gram（二元 + 三元）、词图内敲错边、本地整句模型重排、崩溃不丢、pkg 安装器、签名公证、README 安装 / 隐私 / 许可都已完成并在自用。
@@ -10,6 +10,7 @@
 ## 〇、上线前必须做（不做就不能给别人）
 
 - [ ] 词库质量（产品词库已自建，见 roadmap）：常用词表只有 5.6 万，语料挖出的 1.57 万高频词已并入（蚌埠 / 台州 / 高铁 / 吐槽 这类补上了），挖词漏掉的补充常用词 1,357 条已并入（取餐 / 弹出 / 播放器，2026-09-17），第二轮放宽门槛加叠字与人工清单又并入 11,503 条（不齐 / 线缆 / 呵呵 / 上一页 / 会员价，2026-10-19，`notes/common-words.md`），
+  第一轮丢弃、第二轮候选池里又出现的 1,132 条（研究小组 / 政治人物 / 海拔高度）没加，待人工过目（清单在维护者本机 `~/Documents/glimmer/r1-rejected-but-kept.tsv`）；
   网络用语目录还空着（`assets/lexicon/04_internet_slang`）；LLM 标注的多音字读音抽查；挖词过滤已进 `dict-convert mine`（2026-09-07，`oov_filter.rs`，与原脚本输出逐行一致）；
   LM 表（TSV 48 MB / `lm.qj` 29 MB）不进 git，先按发布附件对待
 - [ ] ★ 首次运行体验：没有 `data/generated/` 时打进包里的样例词库只有几十条，等于不能用；随包数据（词库、LM 表、释义表、emoji）
@@ -18,7 +19,7 @@
 - [ ] 仓库瘦身（2026-09-07 决定：主仓库继续单库、官网独立仓库，不拆代码；要处理的是数据）。
   已做：LLM 中间产物 `gloss-llm.jsonl`（30 MB）/ `gloss-en-llm.jsonl` / `pinyin-llm.jsonl` 移到 `data/generated/`（gitignore），仓库只留导出的 `glossary-*.tsv` 与词库源；
   历史在同日压成 `v0.1.0` 单提交（完整开发历史在本地分支 `archive/dev-history`，不推），所以公开仓库里从没出现过这些文件。
-  还差：仓库推到 GitHub 后跑一次 `tools/release/data-bundle.sh`，把这三个 JSONL 与 `data/generated/*.qj` 传到 `data` 预发布 Release（现在只在本机与归档分支里有）；
+  ~~仓库推到 GitHub 后跑一次 `tools/release/data-bundle.sh`，把这三个 JSONL 与 `data/generated/*.qj` 传到 `data` 预发布 Release~~ 已做（data-v5 起每版都带 `glimmer-llm-intermediates.tar.gz`）；
   正式开源后若 clone 太慢，再考虑把 `assets/lexicon` + `assets/glossary` 拆成数据仓库，现在不做
 - [x] 签名与公证（2026-09-17 收尾）：pkg 安装器、自动注册输入源、版本号 / 构建号（2026-09-06，`bundle.sh --pkg`）；CI 推标签出包、建 Release、生成 `releases.json`（2026-09-07）；
   Developer ID 签名 + 公证 + 钉票据在本机做（`tools/release/macos-local.sh`，凭据在 `.env`，CI 的 macOS 无签名构建由 `release.sh` 取消）；
@@ -50,17 +51,21 @@
   ② 长句里的敲错召回——注错集 11 字以上接近 0（整段一处编辑只到 `correction::MAX_LETTERS` 24，词图敲错边只管「敲错后仍是合法音节」的）；
   ③ ~~语言模型：三元用回指近似、固定 λ 换成回退平滑~~ 2026-09-22 已做（`docs/notes/language-model.md`）：随包 lm.qj 当初只统计了两成维基，全量语料 bigram 27.9% → 28.8%，
   三元 + Kneser-Ney 式回退再到 29.2%（16–20 字 7.6% → 11.5%），回放词 +6；验收只过一半（6 → 12 仍掉 0.3，放到 24 才不掉）。
-  还差：**定随包发哪份模型数据**（全量 bigram 48 MB / 三元 149 MB，都在主树 `data/lm-*`，`data/generated/lm.qj` 还是旧的）并走 `tools/release/data-bundle.sh`；
+  还差：~~定随包发哪份模型数据~~ 已定（data-v4 起随包全量语料三元，阈值 25）；
   语料补技术 / 新闻 / 小说；领域词库只剩 `.qj` 没有 TSV，`dict-convert bigram` 分词读不到（词表 10.1 万，比随包模型少 4 万词）；三元没给短语层合成计数；
   ④ ~~回退换成按前词定~~ 随 ③ 一起做了（接续概率是三元涨分的前提）；⑤ 100 键以上每键 parse 到 10 ms（切分 DP 随长度涨），要增量化；
   ⑥ ~~整句读应用光标前文~~ 2026-09-22 已做（`Engine::set_surrounding_before`，链空时切前文末两词；壳不开本地模型也送；`--eval-context app`），真机已验；
   ⑦ ~~多音字按读音份额扣分~~ 2026-09-22 已做（`sentence::ReadingShare`，没(mo) 扣 4.85，干净集 29.1% → 29.7%、回放词 8857 → 8880；回放整句 −20 条都是用户真用冷门读音打的字：
   个人 n-gram 记词不记读音，整句侧没有选择加分可救，要根治得学习侧按读音记）；
   ⑧ ~~网络用语 / 聊天短语~~ 2026-09-22 已并入 752 条并全量重跑词库 + 三元模型（`notes/internet-slang.md`）：词库 93,276 → 105,694 词形（11,712 条领域词升进基础词库），
-  12 本领域词库 TSV 回来、分词词表 23 万，`lm.qj` 88 MB；干净集 29.7% / 72.8%、回放词 8885、候选表冷查首选 353 → 548。**待发 data-v5**（`pinyin-llm.jsonl` 是从已发词库反推的，随包一起发）。
+  12 本领域词库 TSV 回来、分词词表 23 万，`lm.qj` 88 MB；干净集 29.7% / 72.8%、回放词 8885、候选表冷查首选 353 → 548。已随 data-v5 发出（`pinyin-llm.jsonl` 是从已发词库反推的，一起发了）。
   还差：摆烂 / 避雷 / 睡会儿 语料里一次没出现、翻不过同音整句候选，要补现代对话语料；混杂词（PUA / KPI / TODO）输入码就是英文单词、被英文候选压着；`P0` 这类含数字的输入码在壳里没验；
   **个人数据按字不按读音**（用户词频、选择记录、个人 n-gram）：句首 `没` 记了 32 次，`mohuiyu` 带个人数据仍出 没会鱼（冷启动已是 摸会鱼），与 ⑦ 回放整句掉的 20 条同根，学习侧要按读音记；
   同日还做了：选择次数按句首 / 句中分桶 + 改软加分（`CHOICE_BONUS` 1.5）、个人二元绝对折扣（D=2、记录刻度 ×2，一次普通事件不翻首选；留出学文本 73.2% → 68.3% 是设计代价），数字见 `notes/constant-sweep.md`
+- [ ] 候选排序三处（2026-10-19 对比鼠须管时发现，`notes/common-words.md`）：① 整句压过整词——`shangyiye` 首选 上衣也（整句）、上一页 第二，`gongzuotai` 首选 工作太，`chaogang` 不开模型时首选 朝冈；
+  ② emoji 挤占前几位——`zhengshi` 的 🎩 👔 排第 2、3，正是 被挤到第 4，`qingchu` 的 🆑 把 清楚 挤到第 4；
+  ③ 没有整词时，逐字拼出的整段候选要排在补全词与纠错词前面（`xianlan` 补词前出 先看 / 线路）
+- [ ] 导入 Rime 词库（`*.dict.yaml`）的实际效果没测过（2026-10-19）；不支持 `import_tables`，雾凇这类多文件词库要一个个导
 - [ ] 按场景切词库分组（2026-09-22 提出）：把随包领域词库、导入词库、网络用语表这些编成「场景」（词库组合），按场景查词与排序，提高各场景下的准确率。
   场景能自动切也能手动切：自动按前台应用定（终端 / IDE 用开发场景、聊天软件用聊天场景，接在已有的 `[apps]` 分节上，与按应用关英文候选 / preedit 同一处配置），
   手动在菜单栏 / 状态条切并可为某个应用记住；为降低门槛随包给一个「通用」场景（默认全开或按使用面挑一组），用户不配也能用。
@@ -96,8 +101,11 @@
 - [ ] 已经学进用户词的错读音云端词（`我的 wo di`、`我的哦 wo di e` 这类）没有清理入口：偏好设置词库页给「按读音核对用户词」，或一次性脚本
 - [ ] 正式版前的发布可信性（2026-09-12 外部 CI 检查，测试版先不做）：产品数据改不可变 tag 并在仓库锁版本 + SHA（2026-09-16 已做：`data-vN` Release + `tools/release/data.lock` + `data-fetch.sh`）；
   安装包内容验证（pkg / Setup.exe 里词库、模型、许可齐不齐，`codesign --verify` / `signtool verify`）；`cargo deny`（许可证 + 来源）；`.qj` 读取器越界 fuzz、`glimmer-format` 跑 Miri
+- [ ] 依赖安全（2026-10-19）：`cargo audit` 报 `zip 8.6.0` 三条漏洞（RUSTSEC-2026-0367 / 0368 / 0369，issue #20–#22），由 `candle-core 0.11.0`（已是最新，要求 `zip ^8.6.0`）带进来，修复只在 zip 9：
+  等 candle 升级（微明不调 zip 的解压）；另有四条没人维护（`ttf-parser` #6，`zbus_names` / `zvariant` / `zvariant_derive` #23–#25）；Dependabot PR 积了 8 个（#8、#10、#11、#15–#19，最早 2026-09-21）
 - [ ] 本地整句模型（已进壳并随包发出，见 `docs/notes/neural-rescoring.md`；加载 12 秒是早期首次 Metal 编译的记录，2026-09-12 装机实测 102 ms，划掉）：
-  重排改了切分时应用里的行内拼音要到下一键才更新；日语
+  重排改了切分时应用里的行内拼音要到下一键才更新；日语；
+  许可标注：`tools/release/pack-model.sh` 写的 `GPL-3.0-or-later`，训练语料含 CC BY-SA 4.0 的中文维基，按 CC 的兼容规则只能转成 GPLv3（不带 or later），权重算不算语料的改编作品本身有争议，正式版前定
 - [ ] 个人微调（LoRA 挂在冻结基模上，基模更新后拿本地日志重训）：先在 train 仓库验证收益，再验 candle CPU 训练能不能跑通，都过了才进壳
   （闲时门禁、加载时合并权重、开关与一键清除）；每个模型假设先按 `docs/plan/model-eval.md` 写尺子与基线
 - [ ] 日语 emoji 要等有日语输入模式
@@ -105,10 +113,13 @@
 ## 二、产品特色
 
 - [ ] 释义表收尾：覆盖面再扩（次数阈值降到 100 约 10 万词）；JMdict 校对假名与日文词性；等级表（CEFR / JLPT 已随包，见 `assets/levels/`）
-  也可做英→中、日→中方向的种子；四六级 / 商务英语词表要先找到许可干净的来源
+  也可做英→中、日→中方向的种子；四六级 / 商务英语词表要先找到许可干净的来源；
+  第二轮补充常用词 11,503 条没有释义，词库多字词英文释义覆盖 95.6% → 86.8%（2026-10-19），补要跑 `tools/gloss-gen`（DeepSeek，按量计费）
 - [ ] 可选复习（Phase 4）：输入统计、生词识别、词汇统计（含 CEFR / JLPT 等级分布）已做（2026-09-06）；复习容易变成打扰，先不急
 - [ ] 云联想收尾（Phase 6）：密钥进钥匙串（等签名定了再做，ad-hoc 签名每次重装都弹授权）、按应用禁用、限流与用量统计
 - [ ] 个人模型（Phase 7）：小 Transformer 实验（有评测门槛），见 roadmap
+- [ ] 没合的分支 `claude/glimmer-eval-continue-430d45`（2026-09-19，`glimmer-cli --eval-continue` 续写评测，结论「上屏后无拼音续写不做」）：代码与 `docs/notes/continuation-eval.md` 只在分支上，main 里连结论都没有；
+  它的 worktree `.claude/worktrees/sweet-merkle-d583a6` 在仓库从 `tools/glimmer` 搬到 `openfabrica/glimmer` 后已断开。要么合，要么只把结论并进文档再删分支
 
 - [ ] ★ **主题与自绘渲染器 spike**（2026-09-13 定向，分支 `renderer-spike`，见 [design/rendering.md](../design/rendering.md)）：
   tiny-skia + cosmic-text 画一行「微明 hello 🙂 日本語」+ 圆角阴影，Windows / macOS 与原生并排截图，验四条：彩色 emoji（sbix / COLRv0）、
