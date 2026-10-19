@@ -59,7 +59,7 @@ Release 发出后别改回草稿：草稿的下载地址公开访问是 404，�
    内测版用 semver 预发布号 `0.1.0-alpha.1`、`0.1.0-alpha.2`…：CHANGELOG 按版本号索引、官网按版本号列条目，
    与 macOS 的 `0.1.0` / `0.1.1` 不能同号；Inno 的 `VersionInfoVersion` 只认数字，`build.ps1` 会把后缀去掉再传。
 2. `CHANGELOG.md` 加一节 `## 0.1.0-alpha.1 · 日期 · alpha`。
-3. 打标签 `windows-v0.1.0-alpha.1` 推送。`release.yml` 的 `windows` job 在 `windows-latest` 上：核对版本 → 下载 `data` Release
+3. 打标签 `windows-v0.1.0-alpha.1` 推送。`release.yml` 的 `windows` job 在 `windows-latest` 上：核对版本 → 按 `data.lock` 下载产品数据
    → 装 Inno Setup 7.1.0（与开发机同版本，钉死 GitHub Release 的安装程序）→ `build.ps1`→ 建 Release（`Glimmer-<版本>-Setup.exe` + `SHA256SUMS` + `build-info.json`）
    → `publish-releases-json.sh` 生成 `releases.json`，挂到本次发布并覆盖到 GitHub latest 那版上（官网只读 latest 的）。
 4. **没有代码签名证书时** workflow 设 `GLIMMER_UIACCESS=0`：没签名的 exe 带 uiAccess=true 起不来。
@@ -78,9 +78,9 @@ Release 发出后别改回草稿：草稿的下载地址公开访问是 404，�
    - `linux-check`（`ubuntu-24.04`）：门禁，版本 = 标签、不带 `-dev`、标签在 main 上；后面的 job 都 `needs` 它。
    - `linux-ibus`（matrix `ubuntu-22.04` / `ubuntu-22.04-arm`）：`cargo build --release --locked -p glimmer-linux`，传 artifact `ibus-<arch>`（`glimmer-ibus`）。
    - `linux-fcitx5`（matrix `ubuntu-24.04` / `ubuntu-24.04-arm`）：apt 装 Fcitx5 5.1 构建依赖，编 `glimmer-fcitx5` 静态库 + cmake，`DESTDIR=<目录> cmake --install`，传 artifact `fcitx5-<arch>`（整个安装目录）。
-   - `linux-package`（每架构一个，matrix `ubuntu-22.04` / `ubuntu-22.04-arm`）：下载两个 artifact 与 `data` Release（按 `SHA256SUMS` 校验），
+   - `linux-package`（每架构一个，matrix `ubuntu-22.04` / `ubuntu-22.04-arm`）：下载两个 artifact，按 `data.lock` 下载产品数据（`data-fetch.sh`），
      `GLIMMER_IBUS_BIN=… GLIMMER_FCITX5_STAGE=… apps/linux/scripts/package.sh` 出 deb，Depends 里带 `t64` 直接失败，传 artifact `deb-<arch>`。
-   `linux-release` job 收齐两个 deb，生成 `SHA256SUMS` 与 `build-info.json`（数据摘要取 `data` Release 的 `SHA256SUMS`），建 Release，跑 `publish-releases-json.sh`，配了令牌就 `bump-website.sh`。
+   `linux-release` job 收齐两个 deb，生成 `SHA256SUMS` 与 `build-info.json`（数据标签与摘要取 `data.lock`），建 Release，跑 `publish-releases-json.sh`，配了令牌就 `bump-website.sh`。
 
    **为什么这样拆**：deb 的 Depends 跟着构建机走。在 24.04 上编、打包得到 `libc6 (>= 2.39), libssl3t64`，只有 24.04 起装得上；
    IBus 引擎在 22.04 上编、在 22.04 上跑 `dpkg-shlibdeps`，得到 `libc6 (>= 2.3x), libgcc-s1, libssl3 (>= 3.0.0)` 一类，22.04 / Debian 12 / 24.04 都能装
@@ -142,8 +142,8 @@ IBus 部分支持 Ubuntu 22.04 / Debian 12 起，Fcitx5 部分要 5.1（Ubuntu 2
 供应链：workflow 里的 actions 一律钉到 commit（注释写对应标签），`.github/dependabot.yml` 每周一提 Cargo 与 actions 的更新 PR；`audit.yml` 每周与 Cargo.lock 变动时跑 `cargo audit`；
 cargo 命令全 `--locked`（含 `bundle.sh` 与 `build.ps1`）。普通 CI 只有 `contents: read`，checkout 不留凭据；release 的 secrets 不放顶层 env，只注入用它的那一步。
 
-发版门禁（`release.yml` 第一步）：版本号与标签一致且不带 `-dev`；标签指向的提交必须在 `main` 上（`git merge-base --is-ancestor`）；产品数据下载后按 `data` Release 的 `SHA256SUMS` 校验，摘要写进 `build-info.json` 的 `data_sha256`。
-**正式版前还欠**：产品数据改成不可变 tag 并在仓库里锁定版本（现在滚动覆盖，同一源码 tag 重跑可能拿到不同数据）、安装包内容验证（词库 / 模型 / 许可齐不齐、签名校验）。
+发版门禁（`release.yml` 第一步）：版本号与标签一致且不带 `-dev`；标签指向的提交必须在 `main` 上（`git merge-base --is-ancestor`）；产品数据按 `data.lock` 下载、按锁文件里的哈希校验，标签与摘要写进 `build-info.json` 的 `data_tag` / `data_sha256`。
+**正式版前还欠**：安装包内容验证（词库 / 模型 / 许可齐不齐、签名校验）。
 
 ## 两个 workflow
 
@@ -163,13 +163,13 @@ cargo 命令全 `--locked`（含 `bundle.sh` 与 `build.ps1`）。普通 CI 只�
   （训练仓库导出三件套到 `data/model/`，`tools/release/pack-model.sh` 打成一个 `.qj` 容器，fp16 约 56 MB，元数据也写在那个脚本里）原样上传，
   连同 LLM 续跑中间产物 `glimmer-llm-intermediates.tar.gz` 发到下一个 `data-vN`（`--tag` 可指定，已存在就拒绝），然后改写 `data.lock`。
 - `tools/release/data-fetch.sh`：按 `data.lock` 下载（有 gh 用 gh，没有就 curl 直连）、按锁文件里的哈希校验（不信 Release 自己那份 `SHA256SUMS`），
-  数据包解到 `data/generated/`、`model.qjm` 放到 `data/model/`。`release.yml` 两个 job 和离线自编译走同一个脚本；
+  数据包解到 `data/generated/`、`model.qjm` 放到 `data/model/`。`release.yml` 的 macOS / Windows / Linux 三处和离线自编译走同一个脚本；
   `bundle.sh` 见到 `dict.qj` 就按产品数据打包、见到 `model.qjm` 就放进 `Resources/model/`，`glimmer.iss` 同理装进 `{app}\data\model`。
   标签与两个哈希记进 `build-info.json`（`data_tag` / `data_sha256` / `model_sha256`）。
 
 数据重生成之后（重跑 lexicon / bigram / gloss-gen export）或模型重训之后跑一次 `data-bundle.sh`（三件套比 `.qjm` 新会自动重打），
 把锁文件的改动提交（`chore(data): 数据 data-vN`），否则 CI 打的包还是锁文件指的旧数据。模型文件缺失或哈希不符时 CI 会失败，不会静默地发出错数据的包。
-2026-09-16 之前用的是滚动覆盖的 `data` Release，已冻结不再更新。
+2026-09-16 之前用的是滚动覆盖的 `data` Release，已冻结不再更新。Linux 的 job 当时漏改，到 2026-10-19 才改成走 `data.lock`，`0.1.0-linux.1` / `.2` 带的是 `data` Release 里那时的数据。
 
 ## 签名与公证
 

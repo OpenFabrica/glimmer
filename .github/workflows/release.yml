@@ -410,12 +410,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p data/generated data/model
-          gh release download data --pattern glimmer-data.tar.gz --pattern model.qjm --pattern SHA256SUMS --dir data
-          (cd data && grep -E 'glimmer-data.tar.gz|model.qjm' SHA256SUMS | sha256sum -c -)
-          tar -xzf data/glimmer-data.tar.gz -C data/generated
-          # 本地整句模型单文件：package.sh 见到 data/model/model.qjm 就装进 /usr/lib/glimmer/data/model
-          mv data/model.qjm data/model/
+          # 与 macOS / Windows 同一份 data.lock 锁定的数据；本地整句模型落到 data/model/model.qjm，package.sh 见到就装进 /usr/lib/glimmer/data/model
+          tools/release/data-fetch.sh
           ls -la data/generated data/generated/dicts data/model
 
       # artifact 不保留可执行位，先补上；Depends 里出现 t64 说明依赖算在了 24.04 上，22.04 / Debian 12 装不了，直接失败
@@ -462,15 +458,14 @@ jobs:
           merge-multiple: true
 
       - name: Checksums and build info
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${GITHUB_REF_NAME#linux-v}"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          # 两个 linux-package job 已按 data Release 的 SHA256SUMS 校验过下载的数据，这里直接取那份摘要记进 build-info.json
-          gh release download data --pattern SHA256SUMS --dir "$RUNNER_TEMP/data"
-          DATA_SHA256="$(awk '$2 ~ /glimmer-data\.tar\.gz$/ {print $1}' "$RUNNER_TEMP/data/SHA256SUMS")"
-          MODEL_SHA256="$(awk '$2 ~ /model\.qjm$/ {print $1}' "$RUNNER_TEMP/data/SHA256SUMS")"
+          # 两个 linux-package job 已按 data.lock 下载并校验过数据，这里直接取锁文件里的标签与摘要记进 build-info.json
+          lock_value() { grep -E "^$1 *= *" tools/release/data.lock | head -1 | sed -E 's/^[^=]*= *//' | tr -d '[:space:]'; }
+          DATA_TAG="$(lock_value tag)"
+          DATA_SHA256="$(lock_value glimmer-data.tar.gz)"
+          MODEL_SHA256="$(lock_value model.qjm)"
           cd target/deb
           ls -la
           debs=(./*.deb)
@@ -479,8 +474,8 @@ jobs:
           jq -n --arg version "$VERSION" --arg tag "$GITHUB_REF_NAME" --arg commit "$GITHUB_SHA" \
             --arg built_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg toolchain "$(rustc --version)" \
             --arg runner "$(. /etc/os-release && echo "$PRETTY_NAME")（汇总机；IBus 引擎在 Ubuntu 22.04、Fcitx5 插件在 Ubuntu 24.04 上编，amd64 与 arm64 各自原生 runner）" \
-            --arg data_sha256 "$DATA_SHA256" --arg model_sha256 "$MODEL_SHA256" \
-            '{version: $version, tag: $tag, commit: $commit, built_at: $built_at, toolchain: $toolchain, runner: $runner, data_sha256: $data_sha256, model_sha256: $model_sha256}' \
+            --arg data_tag "$DATA_TAG" --arg data_sha256 "$DATA_SHA256" --arg model_sha256 "$MODEL_SHA256" \
+            '{version: $version, tag: $tag, commit: $commit, built_at: $built_at, toolchain: $toolchain, runner: $runner, data_tag: $data_tag, data_sha256: $data_sha256, model_sha256: $model_sha256}' \
             | tee build-info.json
 
       - name: Create GitHub release
