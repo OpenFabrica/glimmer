@@ -300,7 +300,7 @@ impl Engine {
                 translation: None,
             })
             .collect();
-        // 中文优先：整句先进去占第一，英文词紧跟其后（第二）；关掉时英文词先进、整句排在开头的英文后面
+        // 中文优先：整句先进去占第一（整词让位时排第二），英文词再插在第二；关掉时英文词先进、整句排在开头的英文后面
         if self.chinese_first {
             self.insert_sentence(
                 &mut items,
@@ -491,7 +491,8 @@ impl Engine {
         }
     }
 
-    /// 整句候选。没有英文尾段时是整段拼音的转换（[`Self::plain_sentence`]），排在开头的英文候选之后。
+    /// 整句候选。没有英文尾段时是整段拼音的转换（[`Self::plain_sentence`]），排在开头的英文候选之后；
+    /// 整段按敲的原样正好是一个词、整句领先它不多时再往后一位，排在那个词后面。
     /// 有英文尾段且英文读法胜出（`head_wins`）时，头段的转换加上那个词排第一（`woxiangxuehaorust` → 我想学好rust），
     /// 整段也能读成拼音的再把拼音读法的整句放在第二；英文读法输了就不出（`diaoyong` 不出 掉Yong），
     /// 免得把真正要的候选往后挤。
@@ -520,34 +521,42 @@ impl Engine {
                 }
                 if tail.competes
                     && let Some(full) = first_segmentation(keys)
-                    && let Some(plain) = self.plain_sentence(items, &full, typos)
+                    && let Some((plain, _)) = self.plain_sentence(items, &full, typos)
                 {
                     let position = items.len().min(1);
                     items.insert(position, plain);
                 }
             }
             _ => {
-                if let Some(plain) = self.plain_sentence(items, best, typos) {
-                    let position = leading_english(items);
+                if let Some((plain, yields)) = self.plain_sentence(items, best, typos) {
+                    // 整词让位时整句排在第一个词后面
+                    let position = (leading_english(items) + usize::from(yields)).min(items.len());
                     items.insert(position, plain);
                 }
             }
         }
     }
 
-    /// 整段拼音的整句候选：最优切分至少两个音节、且最优路径不止一个词时才有（空格上屏的就是它）。
+    /// 整段拼音的整句候选：最优切分至少两个音节、且最优路径不止一个词时才有（通常排第一，空格上屏的就是它）。
     /// 整段本身就是词库里的词时不重复；有音节没转成字的不算句子。
     /// 词级候选里已有同文本同读音的候选时不出（那条留在词级排序给它的位置），同文本不同读音的从 `items` 里去掉。
+    ///
+    /// 返回的布尔是「整词让位」：整段按敲的原样正好是一个词，而整句领先它不到 [`Interpolation::whole_word_margin`](crate::sentence::Interpolation::whole_word_margin)，
+    /// 整句该排在第一个词后面（`shangyiye` 上一页 在前、上衣也 在后）。
     pub(super) fn plain_sentence(
         &self,
         items: &mut Vec<Candidate>,
         best: &Segmentation,
         typos: bool,
-    ) -> Option<Candidate> {
+    ) -> Option<(Candidate, bool)> {
         if best.syllables.len() < 2 {
             return None;
         }
-        let mut conversion = self.convert_sentence(&best.patterns(), typos)?;
+        let mut paths = self.convert_sentence_paths(&best.patterns(), typos, false, true);
+        if paths.is_empty() {
+            return None;
+        }
+        let mut conversion = paths.remove(0);
         // 不按原样读的路径（敲错边 / 模糊音）不许压过「敲的拼音本身就是一个词」：`jineng` 按 `jin eng` 切时
         // 词图里没有 技能，敲错边读出 近藤；`ceshi` 读出 的是。词级候选里有音节正好拼成整段输入的词时退回原样的路径
         if conversion.altered() {
@@ -556,7 +565,11 @@ impl Engine {
                 .iter()
                 .any(|c| c.kind == CandidateKind::Chinese && c.syllables.concat() == letters);
             if spelled_exactly {
-                conversion = self.convert_sentence(&best.patterns(), false)?;
+                paths = self.convert_sentence_paths(&best.patterns(), false, false, true);
+                if paths.is_empty() {
+                    return None;
+                }
+                conversion = paths.remove(0);
             }
         }
         if conversion.has_placeholder() {
@@ -580,13 +593,32 @@ impl Engine {
             }
             items.remove(index);
         }
-        Some(Candidate {
-            text: conversion.text,
-            kind,
-            syllables: conversion.syllables,
-            reading: None,
-            translation: None,
-        })
+        // 整词让位只看按敲的原样读出的整词：靠模糊音 / 敲错变体才对上的词本来就排在原样命中后面。
+        // 整词的分取同一段文字里最高的走法：个人 n-gram 把 工作 + 台 抬得比整词 工作台 高时，按 工作 + 台 的分比。
+        // 末尾没打完的音节没读进去时不让（`xiayiz` 只读了 xia yi）：整段不是一个词，词级第一是按整段排的另一个词
+        let margin = self.interpolation.whole_word_margin;
+        let yields = kind == CandidateKind::Sentence
+            && conversion.syllables.len() == best.syllables.len()
+            && paths.iter().any(|whole| {
+                whole.word_count() == 1
+                    && !whole.altered()
+                    && !whole.has_placeholder()
+                    && whole.syllables.len() == conversion.syllables.len()
+                    && paths
+                        .iter()
+                        .filter(|p| p.text == whole.text && !p.altered())
+                        .any(|p| p.score > conversion.score - margin)
+            });
+        Some((
+            Candidate {
+                text: conversion.text,
+                kind,
+                syllables: conversion.syllables,
+                reading: None,
+                translation: None,
+            },
+            yields,
+        ))
     }
 
     /// 跑一次整句转换：主词库 + 用户词（含模糊音与敲错写法，命中的按代价扣分），静态语言模型与个人 n-gram 插值，用户选择次数加分。
@@ -609,6 +641,21 @@ impl Engine {
         typos: bool,
         whole: bool,
     ) -> Option<Conversion> {
+        self.convert_sentence_paths(patterns, typos, whole, false)
+            .into_iter()
+            .next()
+    }
+
+    /// 同 [`Self::convert_sentence_with`]，但返回重排后的全部路径（第一条最好）。
+    /// `whole_word` 为真时，「整段只是一个词、按敲的原样读」的最优读法不在前几条里也带上（[`sentence::Search::whole_word`]），
+    /// 给整句与整词比分用；它与别的路径一起参加神经重排，比的是同一把尺子上的分。
+    pub(super) fn convert_sentence_paths(
+        &self,
+        patterns: &[glimmer_dictionary::SyllablePattern<'_>],
+        typos: bool,
+        whole: bool,
+        whole_word: bool,
+    ) -> Vec<Conversion> {
         let dictionaries = self.all_dictionaries();
         let expanded = self.expand_positions(patterns, typos);
         let k = if self.has_sentence_scorer() {
@@ -625,6 +672,7 @@ impl Engine {
             initial: self.context(),
             protected_extra: self.typo_costs.protected_extra,
             reading: Some(self.reading_share()),
+            whole_word,
         };
         let mut paths = sentence::convert_paths(
             &dictionaries,
@@ -642,7 +690,7 @@ impl Engine {
             paths.retain(|p| p.score >= floor);
             self.rescore_paths(&mut paths, PathUnit::Syllables);
         }
-        paths.into_iter().next()
+        paths
     }
 
     /// 每个位置的写法：敲的原样、模糊音，再加音节级敲错变体（`correction::typo`）当带代价的边，

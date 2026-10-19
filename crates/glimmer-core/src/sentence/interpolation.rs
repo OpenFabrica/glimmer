@@ -1,11 +1,12 @@
 use super::{
     BIGRAM_DISCOUNT, CONFIDENCE_K, INITIAL_CONTEXT_WEIGHT, MAX_CONFIDENCE, READING_CAP,
-    READING_WEIGHT, SPAN_CANDIDATES, TRIGRAM_DISCOUNT, USER_LAMBDA, WORD_PENALTY,
+    READING_WEIGHT, SPAN_CANDIDATES, TRIGRAM_DISCOUNT, USER_LAMBDA, WHOLE_WORD_MARGIN,
+    WORD_PENALTY,
 };
 use crate::ranking::{CHOICE_BONUS, CHOICE_CAP};
 
-/// 个人 n-gram 与静态模型插值的参数（见 [`UserNgram::blend`]），外加整句路径打分的两个常数（开头接上文的权重、每词代价）
-/// 与词级排序里同输入串选择加分的两个常数。缺省值是 `sentence` 与 `ranking` 两个模块里的常数，
+/// 个人 n-gram 与静态模型插值的参数（见 [`UserNgram::blend`]），外加整句路径打分的两个常数（开头接上文的权重、每词代价）、
+/// 整句让整词的门槛与词级排序里同输入串选择加分的两个常数。缺省值是 `sentence` 与 `ranking` 两个模块里的常数，
 /// 回放调参（`glimmer-cli --tune`）时可以整组换掉，引擎与壳只用缺省值。
 ///
 /// [`UserNgram::blend`]: super::UserNgram::blend
@@ -31,6 +32,9 @@ pub struct Interpolation {
 
     /// 整句路径上每个词扣的分（[`WORD_PENALTY`]）。
     pub word_penalty: f64,
+
+    /// 整句领先整词不到这么多分时整词排第一（[`WHOLE_WORD_MARGIN`]），0 为不让。
+    pub whole_word_margin: f64,
 
     /// 词图每个格子最多留几个词（[`SPAN_CANDIDATES`]）。放宽它是打分模型可信度的验收尺子，所以挂在这里能调。
     pub span_candidates: usize,
@@ -62,6 +66,7 @@ impl Interpolation {
         trigram_discount: TRIGRAM_DISCOUNT,
         initial_weight: INITIAL_CONTEXT_WEIGHT,
         word_penalty: WORD_PENALTY,
+        whole_word_margin: WHOLE_WORD_MARGIN,
         span_candidates: SPAN_CANDIDATES,
         reading_weight: READING_WEIGHT,
         reading_cap: READING_CAP,

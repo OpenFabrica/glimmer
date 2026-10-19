@@ -7,7 +7,7 @@ use glimmer_lm::{BackoffMode, Smoothing};
 
 /// 可调的参数名。`lm-` 开头的是静态语言模型自己的（[`smoothing`] 读，模型加载时就要用上），
 /// 其余的应用在引擎上（[`apply`]）。
-pub const KEYS: [&str; 25] = [
+pub const KEYS: [&str; 26] = [
     "lambda",
     "k",
     "cap",
@@ -15,6 +15,7 @@ pub const KEYS: [&str; 25] = [
     "d3",
     "initial",
     "word",
+    "whole",
     "span",
     "reading",
     "reading-cap",
@@ -59,6 +60,8 @@ pub fn apply(engine: &mut Engine, settings: &[String]) -> Result<(), TuneError> 
             "d3" => interpolation.trigram_discount = value,
             "initial" => interpolation.initial_weight = value,
             "word" => interpolation.word_penalty = value,
+            // 整句让整词的门槛，0 为不让
+            "whole" => interpolation.whole_word_margin = value,
             "span" => interpolation.span_candidates = (value as usize).max(1),
             // 多音字读音份额扣分的系数与封顶
             "reading" => interpolation.reading_weight = value,

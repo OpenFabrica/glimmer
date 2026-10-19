@@ -81,6 +81,7 @@ impl Engine {
             protected_extra: 0.0,
             // 五笔编码不是读音
             reading: None,
+            whole_word: false,
         };
         let mut paths = sentence::convert_codes(
             &dictionaries,

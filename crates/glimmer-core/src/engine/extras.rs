@@ -1,6 +1,14 @@
 //! 附加候选：日期时间等快捷项、中英混输的英文词与补全、emoji。
 
-use super::*;
+use glimmer_dictionary::WordList;
+
+use super::learning::Learner;
+use super::{
+    EMOJI_MIN_INDEX, EMOJI_PER_WORD, EMOJI_SCAN, EMOJI_TOTAL, ENGLISH_COMPLETIONS, Engine,
+    MIN_COMPLETION_LETTERS,
+};
+use crate::candidate::{Candidate, CandidateKind};
+use crate::shortcut;
 
 impl Engine {
     /// 精确匹配自定义输入码时，数字键应选择候选。
@@ -133,7 +141,9 @@ impl Engine {
             .collect()
     }
 
-    /// emoji 候选：前几个中文候选里有配 emoji 的，emoji 紧跟在那个词后面，右侧标注它对应的词。
+    /// emoji 候选：前几个中文候选里有配 emoji 的，emoji 跟在那个词后面，右侧标注它对应的词；
+    /// 但最早排在下标 [`EMOJI_MIN_INDEX`]，前三位留给字词（首选配了 emoji 时 emoji 从第四位起），
+    /// 也不插进一串快捷写法或英文词中间（见 [`emoji_slot`]）。
     /// 词后面紧挨着的英文词候选（中文优先时 `key` → 可以、key）不被 emoji 挤开，emoji 排在它之后。
     /// 用户关了 emoji 候选（`emoji_candidates`）时什么都不插。
     pub(super) fn insert_emoji(&self, items: &mut Vec<Candidate>) {
@@ -141,10 +151,12 @@ impl Engine {
             return;
         }
         let Some(table) = &self.emoji else { return };
-        let mut inserted = 0;
+        // 先在原列表上定好每个 emoji 跟在哪里（插入下标），扫完再统一插：插的位置要往后挪到前几位之外，
+        // 边扫边插会让后挪的 emoji 夹进还没扫到的词中间
+        let mut planned: Vec<(usize, Candidate)> = Vec::new();
         let mut index = 0;
         let mut scanned = 0;
-        while index < items.len() && scanned < EMOJI_SCAN && inserted < EMOJI_TOTAL {
+        while index < items.len() && scanned < EMOJI_SCAN && planned.len() < EMOJI_TOTAL {
             let item = &items[index];
             index += 1;
             if !matches!(
@@ -175,10 +187,10 @@ impl Engine {
                 }
             }
             for emoji in emojis.iter().take(EMOJI_PER_WORD) {
-                if inserted >= EMOJI_TOTAL {
+                if planned.len() >= EMOJI_TOTAL {
                     break;
                 }
-                items.insert(
+                planned.push((
                     index,
                     Candidate {
                         text: emoji.clone(),
@@ -187,10 +199,34 @@ impl Engine {
                         reading: Some(word.clone()),
                         translation: None,
                     },
-                );
-                index += 1;
-                inserted += 1;
+                ));
             }
         }
+        // 插入下标都按插之前的列表算好再从后往前插：前面的下标不受影响；同一个位置上先插的会被后插的推到后面，
+        // 所以倒着插顺序不乱。挪位只会往后、且不越过后面的计划位置，先后关系不变
+        let slots: Vec<usize> = planned
+            .iter()
+            .map(|(index, _)| emoji_slot(items, *index))
+            .collect();
+        for (slot, (_, emoji)) in slots.into_iter().zip(planned).rev() {
+            items.insert(slot, emoji);
+        }
     }
+}
+
+/// emoji 的插入下标：`index` 是紧跟对应词的位置，最早挪到 [`EMOJI_MIN_INDEX`]（前三位留给字词）；
+/// 落在一串快捷写法或英文词中间时挪到这一串之后（`sj` 的三种时间写法、英文词与它的补全不被拆开）。列表不够长时排在末尾。
+fn emoji_slot(items: &[Candidate], index: usize) -> usize {
+    let mut slot = index.max(EMOJI_MIN_INDEX).min(items.len());
+    while slot > 0
+        && slot < items.len()
+        && items[slot].kind == items[slot - 1].kind
+        && matches!(
+            items[slot].kind,
+            CandidateKind::Shortcut | CandidateKind::English
+        )
+    {
+        slot += 1;
+    }
+    slot
 }

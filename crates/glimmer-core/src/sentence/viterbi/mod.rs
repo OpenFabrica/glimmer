@@ -53,6 +53,7 @@ pub fn convert(
 }
 
 /// 得分最高的前 `search.paths` 条路径（最多束宽条，按得分降序，文本相同的只留一条）：给重打分用。
+/// `search.whole_word` 为真时末尾再补整词的读法，可能与前面某条同文本（见 [`Search::whole_word`]）。
 ///
 /// `search.keep_partial` 为真时全拼句子末尾的单字母也当一个音节读（`huo z…` → 或者）：给「整段拼音读法」与别的读法比分用，
 /// 比分要两边覆盖同样多的字母。`search.initial` 是这段拼音之前的上文，第一个词的转移按它算；
@@ -117,7 +118,7 @@ pub fn convert_codes(
     search_lattice(&mut lattice, search, model, personal, &weight)
 }
 
-/// 词图上得分最高的前 `search.paths` 条路径（最多束宽条，按得分降序，文本相同的只留一条）。
+/// 词图上得分最高的前 `search.paths` 条路径（最多束宽条，按得分降序，文本相同的只留一条；整词读法另补，见 [`add_whole_word`]）。
 /// 位置是什么由 `lattice` 定（拼音是音节、五笔是编码字母），这里只管找路。
 fn search_lattice(
     lattice: &mut impl Lattice,
@@ -202,6 +203,12 @@ fn search_lattice(
             });
         }
     }
+    // 整段一个词的走法可能被束宽剪掉，剪之前先记下来
+    let whole = if search.whole_word {
+        whole_word(&nodes[n])
+    } else {
+        None
+    };
     prune(&mut nodes[n]);
     // 终点上全部节点的全部走法一起按得分排：前 k 条可以是同一个句尾词的几种走法
     let mut finals: Vec<(f64, usize, usize)> = nodes[n]
@@ -216,7 +223,7 @@ fn search_lattice(
         .collect();
     finals.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
     let mut paths: Vec<Conversion> = Vec::with_capacity(k.min(finals.len()));
-    for (_, index, rank) in finals {
+    for &(_, index, rank) in &finals {
         if paths.len() >= k {
             break;
         }
@@ -225,7 +232,66 @@ fn search_lattice(
             paths.push(conversion);
         }
     }
+    if let Some(whole) = whole {
+        add_whole_word(&mut paths, whole, &nodes, &finals);
+    }
     paths
+}
+
+/// 把整段一个词的读法补进 `paths`（见 [`Search::whole_word`]），整词那条一定在：比分时靠它认出哪段文字是整词。
+/// 同一段文字按几个词切的走法分更高时（个人 n-gram 把 工作 + 台 抬得比整词 工作台 高），那条也要在，
+/// 整句与整词比分取同文字里最高的；它不在前 k 条里就从终点的全部走法里找。
+fn add_whole_word(
+    paths: &mut Vec<Conversion>,
+    whole: Conversion,
+    nodes: &[Vec<Node>],
+    finals: &[(f64, usize, usize)],
+) {
+    let n = nodes.len() - 1;
+    if !paths.iter().any(|p| p.text == whole.text) {
+        // finals 按得分降序，找到的第一条同文字走法就是剪枝后留下的里面最好的
+        let same = finals
+            .iter()
+            .map(|&(_, index, rank)| backtrack(nodes, n, index, rank))
+            .find(|p| p.text == whole.text);
+        if let Some(same) = same
+            && same.score > whole.score
+        {
+            paths.push(same);
+        }
+    }
+    if !paths
+        .iter()
+        .any(|p| p.text == whole.text && p.word_count() == 1)
+    {
+        paths.push(whole);
+    }
+}
+
+/// 终点上整段只有一个词、按敲的原样读的节点（没有模糊音 / 敲错代价，不是占位）里得分最高的那条路径。
+fn whole_word(nodes: &[Node]) -> Option<Conversion> {
+    let node = nodes
+        .iter()
+        .filter(|node| node.start == 0 && !node.placeholder && node.best().penalty == 0.0)
+        .max_by(|a, b| {
+            a.best()
+                .score
+                .partial_cmp(&b.best().score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })?;
+    let arrival = node.best();
+    Some(Conversion {
+        text: node.text.clone(),
+        syllables: node.syllables.clone(),
+        words: vec![SentenceWord {
+            text: node.text.clone(),
+            syllables: node.syllables.clone(),
+            placeholder: false,
+        }],
+        score: arrival.score,
+        static_score: arrival.static_score,
+        penalty: arrival.penalty,
+    })
 }
 
 /// 从 `nodes[position][index]` 的第 `rank` 种走法回溯出整条路径。

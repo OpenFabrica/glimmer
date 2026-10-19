@@ -161,7 +161,8 @@ Alacritty / kitty / VS Code / Cursor / Zed / JetBrains 全家 / MacVim / Sublime
 - **英文补全**：整段输入切成的拼音「不像话」（切不动、或非末尾有简拼 / 残缺音节：`compa` → `co'm'pa`、`impor` 连第一个字母都切不动）
   且至少 3 个字母时，除了整段正好是的英文词，还出词表里该前缀下最常用的 3 个（`compa` → company / companies / compared），
   紧跟在精确词之后、排在拼音候选前。干净的拼音（`xian`、`shan`）不补全，免得每个音节都冒英文。词频来自 wordfreq（`tools/corpus/english_frequency.py`）。
-- **emoji**：前 5 个中文 / 英文候选里有配 emoji 的，emoji 紧跟在那个词后面（`ku` → 哭 😢 😭，`smile` → smile 🙂 😊），右侧标注对应的词；
+- **emoji**：前 5 个中文 / 英文候选里有配 emoji 的，emoji 跟在那个词后面，右侧标注对应的词；最早排第四，前三位留给字词（`ku` → 库 哭 酷 😢 😭），
+  也不插进一串快捷写法或英文词中间（`sj` 的几种时间写法连在一起），英文模式下排在全部英文词之后；
   每个词最多 2 个、一次最多 3 个，`CandidateKind::Emoji`，上屏按那个词的音节消耗拼音（英文词带出的对应整段输入）、不记学习。
   数据是 Unicode CLDR 中文与英文 annotations（`assets/emoji/emoji-zh.tsv`、`emoji-en.tsv`，Unicode License v3，可发布，加载时合成一张表），
   `dict-convert emoji --language zh|en` 生成：单字词只收名字里含这个字的 emoji，名字里含这个词的靠前、名字越短越靠前。

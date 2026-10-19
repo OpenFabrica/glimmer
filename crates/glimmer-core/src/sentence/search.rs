@@ -22,6 +22,10 @@ pub struct Search<'a> {
 
     /// 多音字的读音份额表（见 [`ReadingShare`]）；`None` 为不扣读音份额。五笔编码没有读音，那条路一律 `None`。
     pub reading: Option<&'a ReadingShare>,
+
+    /// 终点上「整段只是一个词、按敲的原样读」的最优走法也带回来，不在前 `paths` 条里就补在最后；
+    /// 同一段文字按几个词切、分更高的走法也补上。整句与整词比分用（见 [`WHOLE_WORD_MARGIN`](super::WHOLE_WORD_MARGIN)）。
+    pub whole_word: bool,
 }
 
 impl Search<'_> {
@@ -32,5 +36,6 @@ impl Search<'_> {
         initial: Context::START,
         protected_extra: 0.0,
         reading: None,
+        whole_word: false,
     };
 }

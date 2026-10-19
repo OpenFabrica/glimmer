@@ -44,6 +44,7 @@ description: 日期时间、算式与中文数字、按码点输入字符、中�
 
 ## emoji
 
-前几个候选中有对应 emoji 的词，emoji 紧随该词之后，右侧标注对应的词：`ku` → 哭 😢 😭，英文模式 `smile` → smile 🙂 😊。
+前几个候选中有对应 emoji 的词，emoji 跟在该词之后，右侧标注对应的词；前三位留给字词，emoji 最早排第四：`ku` → 库 哭 酷 😢 😭。
+英文模式下 emoji 排在全部英文词之后。
 每个词最多两个，一次最多三个，上屏不记录学习。
 不需要时取消「设置 → 通用」的「给 emoji 候选」（配置 `[general] emoji_candidates = false`），拼音、五笔与英文模式都不再出 emoji。

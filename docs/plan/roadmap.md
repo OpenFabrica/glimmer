@@ -21,6 +21,9 @@
 - [x] Option+数字上屏候选的译文（`Engine::commit_translation`，控制器在 `handleEvent:client:` 里按键码认，其余交父类）
 - [x] 整段切不动时取能切分的最长前缀出候选，剩余字母作为未切分尾部保留（`kaifv` → `kai'f'v`）
 - [x] 整句转换（bigram + Viterbi），含简拼整句（`wxqcf` → 我想去蹭饭 / `jttqhh` → 今天天气很好）
+- [x] 整句让整词、emoji 让出前三位（2026-10-19，`docs/notes/constant-sweep.md`「整句让整词」）：整段按敲的原样正好是一个词、整句领先它不到 3.5 分时整词排第一
+  （`shangyiye` 上一页 / `gongzuotai` 工作台 / `chaogang` 超纲，原来是 上衣也 / 工作太 / 朝冈，朝冈 只在不开模型时）；emoji 最早排第四（`zhengshi` 正是 回到第二）。
+  同时量过的第三处「没有整词时逐字拼出的整段排到纠错结果前面」改错的比改对的多（差距 < 1 时改对 10、改错 29），不做
 - [x] 模糊音（Core `fuzzy`，配置 `[fuzzy]`）：z/zh、c/ch、s/sh、n/l、f/h、l/r、an/ang、en/eng、in/ing，
   词库按「每个位置多种写法」一次查出，模糊命中词频减半排序，整句转换同样生效
 - [x] 偏好设置「关于」页（2026-09-05）：版本 + 构建号、测试版许可（仓库 `LICENSE` 由 MIT 改为测试版保留所有权利，开源时再定）、数据署名、隐私说明、
@@ -81,7 +84,7 @@
 - [x] 中英混输：整段输入在英文词表里即出英文候选，作为拼音「不像话」时排第一，否则排第二（词表 2026-09-05 起来自 `assets/lexicon/05_english`，ESDB / CSpell，MIT）
 - [x] 英文补全：拼音不像话且 ≥ 3 个字母时出该前缀下最常用的 3 个英文词（词频 wordfreq），第一个字母就切不动的输入也出
 - [x] 英文直输段：组句中敲 `-` 后整段原样上屏（`no-way`），`-` 不再翻页
-- [x] emoji 候选（Core `emoji`，Unicode CLDR 中文 annotations，`assets/emoji/`）：紧跟对应词，右侧标注词
+- [x] emoji 候选（Core `emoji`，Unicode CLDR 中文 annotations，`assets/emoji/`）：紧跟对应词，右侧标注词；2026-10-19 起最早排第四，前三位留给字词
 - [x] 密钥：输入法进程读配置同目录的 `.env`（launchd 看不到 shell 环境变量）
 - [x] 学习语言、每页候选数、翻页键、外观、模式键从配置文件读取（`[general]` / `[shortcut]`），保存后自动热加载
 - [x] 应用图标与输入法菜单图标（`assets/icon/logo.png` → bundle.sh 生成 icns 与多分辨率 tiff）

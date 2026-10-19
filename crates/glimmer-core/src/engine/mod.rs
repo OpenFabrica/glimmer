@@ -320,6 +320,8 @@ const ENGLISH_ZIPF_FLOOR: f64 = 3.0;
 const EMOJI_SCAN: usize = 5;
 const EMOJI_PER_WORD: usize = 2;
 const EMOJI_TOTAL: usize = 3;
+/// emoji 最早插在第几个下标（0 起）：前三位留给字词。紧跟在首选后面时，`zhengshi` 的 🎩 👔 会把 正是 挤到第四。
+const EMOJI_MIN_INDEX: usize = 3;
 
 /// 自动造词：用户连着选出的两个词，合起来不在词库里、且这条接续已记过这么多次，就记成用户词。
 /// 同一段拼音里连着选出来的（`glimmer` 选 青 再选 简）是「用户把它当一个词打」的强信号，两次就够；

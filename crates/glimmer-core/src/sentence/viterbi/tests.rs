@@ -511,3 +511,80 @@ fn top_paths_differ_anywhere_in_the_sentence() {
         paths[0].score
     );
 }
+
+/// 要了整词（`whole_word`）时，终点上「整段只是一个词」的最优读法不在前 k 条里也补在最后；
+/// 只靠替代写法（敲错变体 / 模糊音）才对上的整词不算。
+#[test]
+fn the_whole_word_reading_comes_back_outside_the_top_paths() {
+    let run = |dictionary: &Dictionary, patterns: &[Vec<SyllablePattern<'_>>], whole_word: bool| {
+        convert_paths(
+            &[dictionary],
+            patterns,
+            Search {
+                whole_word,
+                ..Search::BEST
+            },
+            &NoLanguageModel,
+            Personal::NONE,
+            |_| 0,
+            |index, syllable| {
+                if index == 2 && syllable == "dai" {
+                    2.0
+                } else {
+                    0.0
+                }
+            },
+            &mut SpanCache::default(),
+        )
+    };
+    let texts = |paths: &[Conversion]| paths.iter().map(|p| p.text.clone()).collect::<Vec<_>>();
+    // 只按词频兜底：工作 + 太 比整词 工作台 高约 1.2 分
+    let dictionary = Dictionary::parse(
+        "工作\tgong zuo\t1000000\n太\ttai\t1000000\n工作台\tgong zuo tai\t1000\n",
+    )
+    .unwrap();
+    let patterns = complete(&["gong", "zuo", "tai"]);
+    assert_eq!(texts(&run(&dictionary, &patterns, false)), ["工作太"]);
+    let paths = run(&dictionary, &patterns, true);
+    assert_eq!(texts(&paths), ["工作太", "工作台"]);
+    assert_eq!(paths[1].word_count(), 1);
+    assert!(paths[1].score < paths[0].score);
+
+    // 整词只在敲错变体 dai 上：不算原样整词，不带回来
+    let dictionary = Dictionary::parse(
+        "工作\tgong zuo\t1000000\n太\ttai\t1000000\n工作袋\tgong zuo dai\t1000\n",
+    )
+    .unwrap();
+    let mut patterns = complete(&["gong", "zuo", "tai"]);
+    patterns[2].push(SyllablePattern::complete("dai"));
+    assert_eq!(texts(&run(&dictionary, &patterns, true)), ["工作太"]);
+}
+
+/// 同一段文字按几个词切比整词分高时（工作 + 台 高过冷僻的整词 工作台），两条都带回来：
+/// 整词那条用来认出这段文字是整词，比分取同文字里最高的那条。
+#[test]
+fn the_whole_word_text_also_comes_back_in_its_best_segmentation() {
+    let dictionary = Dictionary::parse(
+        "工作\tgong zuo\t1000000\n太\ttai\t2000000\n台\ttai\t1000000\n工作台\tgong zuo tai\t10\n",
+    )
+    .unwrap();
+    let paths = convert_paths(
+        &[&dictionary],
+        &complete(&["gong", "zuo", "tai"]),
+        Search {
+            whole_word: true,
+            ..Search::BEST
+        },
+        &NoLanguageModel,
+        Personal::NONE,
+        |_| 0,
+        |_, _| 0.0,
+        &mut SpanCache::default(),
+    );
+    let summary: Vec<(&str, usize)> = paths
+        .iter()
+        .map(|p| (p.text.as_str(), p.word_count()))
+        .collect();
+    assert_eq!(summary, [("工作太", 2), ("工作台", 2), ("工作台", 1)]);
+    assert!(paths[1].score > paths[2].score);
+}

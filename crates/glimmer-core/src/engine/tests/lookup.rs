@@ -224,6 +224,68 @@ fn sentence_conversion_leads_when_input_spans_several_words() {
     assert_eq!(all[0], "想开");
 }
 
+/// 整段按敲的原样正好是一个词、整句领先它不多：整词排第一、整句第二；整句领先得多，或门槛设成 0，整句照旧排第一。
+#[test]
+fn a_whole_word_leads_unless_the_sentence_is_clearly_better() {
+    let first_two = |dictionary: &str, margin: f64| {
+        let mut engine = Engine::new(Dictionary::parse(dictionary).unwrap());
+        engine.set_interpolation(Interpolation {
+            whole_word_margin: margin,
+            ..Interpolation::DEFAULT
+        });
+        engine.set_input("gongzuotai");
+        engine
+            .query()
+            .unwrap()
+            .candidates
+            .items
+            .into_iter()
+            .take(2)
+            .map(|c| (c.text, c.kind))
+            .collect::<Vec<_>>()
+    };
+    let pair = |text: &str, kind: CandidateKind| (text.to_owned(), kind);
+    // 只按词频兜底：工作 + 太 比整词 工作台 高约 1.2 分
+    let close = "工作\tgong zuo\t1000000\n太\ttai\t1000000\n工作台\tgong zuo tai\t1000\n";
+    assert_eq!(
+        first_two(close, 3.0),
+        [
+            pair("工作台", CandidateKind::Chinese),
+            pair("工作太", CandidateKind::Sentence)
+        ]
+    );
+    assert_eq!(
+        first_two(close, 0.0)[0],
+        pair("工作太", CandidateKind::Sentence)
+    );
+    // 整词冷僻得多（整句领先 7 分以上）
+    let far = "工作\tgong zuo\t1000000\n太\ttai\t1000000\n工作台\tgong zuo tai\t1\n";
+    assert_eq!(
+        first_two(far, 3.0)[0],
+        pair("工作太", CandidateKind::Sentence)
+    );
+    // 末尾音节没打完（`gongzuotaiz` 的 z）：整句与整词都只读了前三个音节，整段不是一个词，整句照旧第一
+    let mut engine = Engine::new(
+        Dictionary::parse(&format!("{close}工作台子\tgong zuo tai zi\t1000\n")).unwrap(),
+    );
+    engine.set_input("gongzuotaiz");
+    let first = engine.query().unwrap().candidates.items[0].clone();
+    assert_eq!(
+        (first.text.as_str(), first.kind),
+        ("工作太", CandidateKind::Sentence)
+    );
+    // 整词一样冷僻，但同一段文字按 工作 + 台 切只比整句低一点：比的是同文字里最高的分，整词照样第一
+    let split =
+        "工作\tgong zuo\t1000000\n太\ttai\t2000000\n台\ttai\t1000000\n工作台\tgong zuo tai\t1\n";
+    assert_eq!(
+        first_two(split, 3.0),
+        [
+            pair("工作台", CandidateKind::Chinese),
+            pair("工作太", CandidateKind::Sentence)
+        ]
+    );
+}
+
 #[test]
 fn shortcuts_follow_the_first_local_candidate() {
     let all = texts("rq");

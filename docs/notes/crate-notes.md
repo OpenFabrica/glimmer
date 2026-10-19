@@ -51,7 +51,7 @@ TSV 解析、查询与生成工具把 `lue` / `nue` 统一成 `lve` / `nve`。
   查询（在查词之后、插整句之前）、上屏重算 `sentence_words` / `mixed_words`、中英混输比分、纠错的原样得分、云联想的拼音与本地参考都先调它，几处读的是同一种切分。
   只有一种同形切分时不做转换。光标按音节移动 / 按音节删与光标后剩余拼音的显示走 `Engine::preferred_segmentation`（同一种挑法）；
   查询与剩余拼音显示把挑出的切分记在 `preferred_segmentations`（最多 4 条，与 `span_cache` 一起清），方向键直接复用，不重转整句。
-- 整句搜索的参数打包在 `sentence::Search`（`keep_partial` / `paths` / `initial` / `protected_extra` / `reading`），`convert_paths` 只收它；拼音的整句转换都经 `Engine::convert_sentence_with` 一处（五笔整句经 `convert_wubi_sentence`）。
+- 整句搜索的参数打包在 `sentence::Search`（`keep_partial` / `paths` / `initial` / `protected_extra` / `reading` / `whole_word`），`convert_paths` 只收它；拼音的整句转换都经 `Engine::convert_sentence_paths` 一处（`convert_sentence_with` 取它的第一条，五笔整句经 `convert_wubi_sentence`）。
 - 词图与找路分开：`sentence/lattice/` 的 `Lattice` trait 回答「位置 `[start, end)` 上有哪些词」，`SyllableLattice`（拼音，位置是音节，格子候选 `span_candidates` 与原样成词保护都在它里面）
   与 `CodeLattice`（五笔，位置是编码字母）各实现一份；`viterbi::search_lattice` 只认 trait，`convert_paths` / `convert_codes` 是两个入口。2026-09-19 抽出时干净集 9808 句的评测数字一位不变。
   - **接上文**：`initial` 取 `Engine::context()`（`engine/surrounding/`：**上屏链上有词就用链，链是空的才用壳给的应用光标前文，都没有才当句首**；
@@ -61,6 +61,12 @@ TSV 解析、查询与生成工具把 `lue` / `nue` 统一成 `lve` / `nve`。
     只在文本变了时切一次；词级排序（`query/mod.rs`）与五笔整句也用同一个 `Engine::context()`，学习记的转移仍只看上屏链。
     `Engine::seed_chain(光标前文)` 是另一条路：直接把切出来的词摆进链（不学习、不写日志），整句评测的 `chain` 口径用它。数字见 `long-sentence.md`。
   - **每词代价**：路径上每个词扣 `WORD_PENALTY` 1（`Interpolation::word_penalty`，`--tune word=`），几个单字连起来不再压过整词（笔给 / 笔记）；不进 `static_score`，神经重排后照留。
+  - **整句让整词**：整段按敲的原样读正好是一个词（没有模糊音 / 敲错代价），而整句领先它不到 `WHOLE_WORD_MARGIN` 3.5 分时，整句排到第一个词后面
+    （`Engine::plain_sentence` 返回的「让位」，`Interpolation::whole_word_margin`，`--tune whole=`，0 为不让）。`shangyiye` 上一页 / `gongzuotai` 工作台 排第一。
+    末尾音节没打完、整句只读了前面几个音节时不让（`xiayiz`）。
+    这条整词路径常被束宽 8 剪掉，所以 `Search::whole_word` 让 Viterbi 在终点剪枝前先记下它、不在前几条里就补在最后（`viterbi::whole_word` / `add_whole_word`），与别的路径一起进神经重排再比。
+    整词的分取同一段文字里最高的走法：个人 n-gram 把 工作 + 台 抬得比整词 工作台 高时，前几条里只有 工作 + 台，按它比（同文字的那条也补回来）。
+    3.5 是按 `gongzuotai` 定的：带神经重排时 工作太 领先 工作台 3 分多。数字与代价见 `constant-sweep.md`。
   - **多音字读音份额**（`sentence::ReadingShare`）：语言模型只看字不看音，而词库按读音分了词频，所以一个词按某个读音命中时减掉 `ln(该读音词频 / 该词全部读音词频之和)`
     （没(mo) 约 −4.85，单读音词 0），系数 `READING_WEIGHT` 1、封顶 `READING_CAP` 6（`--tune reading=` / `reading-cap=`）。
     表在 `Engine::rebuild_reading_share` 里扫全部词库建一次（主词库 + 附加词库 + 用户词，871 个多读音词，约 13 ms），装词库 / 换学习器时重建，不跟着上屏走。
@@ -80,6 +86,10 @@ TSV 解析、查询与生成工具把 `lue` / `nue` 统一成 `lve` / `nve`。
   留出评测首选 23% → 61%，见 `long-sentence.md`（加折扣之后文本里只出现一次的搭配不再抬分，同一份留出掉 5 个点，见 `constant-sweep.md`）。
 - 两个候选开关都在 Core 生效、缺省开：`Engine::set_mixed_english`（配置 `[general] mixed_english_candidates`）关掉时 `insert_english` 直接返回（精确词与补全都不出，句末英文词 `EnglishTail` 照旧）；
   `Engine::set_emoji_candidates`（配置 `[general] emoji_candidates`）关掉时 `insert_emoji` 直接返回，emoji 表照常加载，热重载改开关不用重建 Engine。
+  emoji 跟在前 `EMOJI_SCAN` 5 个候选里配了 emoji 的词后面（每词最多 `EMOJI_PER_WORD` 2 个，共 `EMOJI_TOTAL` 3 个），但最早排在下标 `EMOJI_MIN_INDEX` 3、
+  也不插进一串快捷写法或英文词中间（`extras::emoji_slot`）：
+  前三位留给字词（`zhengshi` 的 🎩 👔 原来紧跟首选，把 正是 挤到第四）。回放首选不变，没命中首选的 118 种词往前挪（菜单 / 收集 / 右键 4 → 2），
+  往后挪的只有 3 次 emoji 上屏，见 `constant-sweep.md`。
 - `custom_phrase::merge_replacements` 把平台给的「输入码 → 短语」表（macOS 系统文本替换）并进配置里的自定义短语：每条占该码最靠前的空位（1–9），
   输入码不是小写字母、已有同码同文本、九位都满的跳过；Core 不管数据从哪来。
 - 拼写纠错（`correction`）：整段一处编辑的变体里相邻换位允许末尾音节没敲完（`loose_segmentation`，`mignt` → `ming t…`；
