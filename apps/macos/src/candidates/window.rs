@@ -206,7 +206,10 @@ fn collection_behavior() -> NSWindowCollectionBehavior {
         | NSWindowCollectionBehavior::Stationary
 }
 
-/// 包含 `point` 的那块屏幕的可见区域；哪块都不包含返回 `None`。
+/// 包含 `point` 的那块屏幕的整块范围；哪块都不包含返回 `None`。
+///
+/// 用 `frame` 不用 `visibleFrame`（与鼠须管一致）：扣掉 Dock 后光标行下方常放不下，窗口就翻到上方，
+/// 而有的应用报的光标行偏低一行，翻上去正好盖住正在输入的拼音；面板层级高于 Dock，盖住 Dock 也看得见。
 fn screen_containing(mtm: MainThreadMarker, point: NSPoint) -> Option<NSRect> {
     let screens = NSScreen::screens(mtm);
     let hit = screens.iter().find(|screen| {
@@ -216,13 +219,13 @@ fn screen_containing(mtm: MainThreadMarker, point: NSPoint) -> Option<NSRect> {
             && point.y >= frame.origin.y
             && point.y < frame.origin.y + frame.size.height
     });
-    hit.map(|screen| screen.visibleFrame())
+    hit.map(|screen| screen.frame())
 }
 
-/// 主屏的可见区域；连主屏都没有时不限制。
+/// 主屏的整块范围；连主屏都没有时不限制。
 fn main_screen_or_anywhere(mtm: MainThreadMarker) -> NSRect {
     NSScreen::mainScreen(mtm)
-        .map(|s| s.visibleFrame())
+        .map(|s| s.frame())
         .unwrap_or_else(|| {
             NSRect::new(
                 NSPoint::new(f64::MIN / 2.0, f64::MIN / 2.0),
