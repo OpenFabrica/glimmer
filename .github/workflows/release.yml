@@ -325,7 +325,7 @@ jobs:
           cargo build --release --locked -p glimmer-linux
           readelf -d target/release/glimmer-ibus | grep NEEDED
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ibus-${{ matrix.arch }}
           path: target/release/glimmer-ibus
@@ -370,7 +370,7 @@ jobs:
           find "$RUNNER_TEMP/fcitx5-stage" -type f
           readelf -d "$RUNNER_TEMP"/fcitx5-stage/usr/lib/*/fcitx5/glimmer.so | grep NEEDED
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: fcitx5-${{ matrix.arch }}
           path: ${{ runner.temp }}/fcitx5-stage/
@@ -426,7 +426,7 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: deb-${{ matrix.arch }}
           path: target/deb/*.deb
