@@ -346,11 +346,11 @@ IBus 引擎进程 `glimmer-ibus`（package `glimmer-linux`），设计见 `docs/
 
 产品数据的生成工具，输出到 `data/generated/`（gitignore）。
 
-- `ai`：AI 与软件开发领域词库，从 `assets/lexicon/ai/{terms,names}.tsv` 和 `domains/*.tsv` 校验生成 `dicts/ai.tsv` / `ai.qj`、`ai-audit.tsv`、`ai-coverage.tsv`；8,279 源条目，主词库去重后 8,179 条。`--exclude` 只排除必选主词库，`--corpus` 同时给 `corpus.txt` 和 `development.txt`，人工权重与真实次数分列，英文按标识符边界计数。`alias` 支持 `C++/@cpp`，`mixed` 支持 `Git分支/@gitfenzhi`，构建拒绝同码不同词。Core 统一开关，英文补全个人选择优先、领域次之；配置 `domains` 仍用 `ai`。见 [设计](../design/ai-dictionary.md)。
+- `ai`：AI 与软件开发领域词库，从 `assets/lexicon/ai/{terms,names}.tsv` 和 `domains/*.tsv` 校验生成 `dicts/ai.tsv` / `ai.qj`、`ai-audit.tsv`、`ai-coverage.tsv`；8,279 源条目，主词库去重后 7,726 条（2026-10-19）。`--exclude` 只排除必选主词库，`--corpus` 同时给 `corpus.txt` 和 `development.txt`，人工权重与真实次数分列，英文按标识符边界计数。`alias` 支持 `C++/@cpp`，`mixed` 支持 `Git分支/@gitfenzhi`，构建拒绝同码不同词。Core 统一开关，英文补全个人选择优先、领域次之；配置 `domains` 仍用 `ai`。见 [设计](../design/ai-dictionary.md)。
 
 - `lexicon`：从 `assets/lexicon/`（自建词库源：规范字 + 常用词 + THUOCL 领域词）加 Unihan 读音（`data/unihan/Unihan_Readings.txt`）、LLM 多音字标注（`gloss-gen pinyin`，
   结果 `data/generated/pinyin-llm.jsonl`，不进 git，**随数据包的 `glimmer-llm-intermediates.tar.gz` 发**，丢了就得从已发布的词库里反推，见 `internet-slang.md`）、
-  语料词频（`lm-unigram.tsv`）建基础词库 `dict.tsv`（10.7 万条）。标注可给一个词多个读音与占比（一行 `yi hang` 0.7 / `yi xing` 0.3，占比 < 5% 的次要读音丢掉），每个读音一条、词频按占比分，引擎的多音字读音份额就从这里来；旧版只有 `pinyin` 一项的文件照读，并把 THUOCL 领域词按语料次数 < 50 拆成
+  语料词频（`lm-unigram.tsv`）建基础词库 `dict.tsv`（11.8 万条，含补充常用词）。标注可给一个词多个读音与占比（一行 `yi hang` 0.7 / `yi xing` 0.3，占比 < 5% 的次要读音丢掉），每个读音一条、词频按占比分，引擎的多音字读音份额就从这里来；旧版只有 `pinyin` 一项的文件照读，并把 THUOCL 领域词按语料次数 < 50 拆成
   `dicts/<领域>.tsv` + `.qj`（11 本、13 万条，`--domain-keep-min`），流程见 `assets/lexicon/GLIMMER.md`；`--extra-words` 并入人工挑的领域词 `assets/lexicon/domain_words.tsv`、
   补充常用词 `common_words.tsv`、网络用语 `04_internet_slang/slang_words.tsv` 与中英混杂词 `mixed_words.tsv`。
   音节判定在 `syllable.rs`（`lexicon` 与 `supplement` 共用）：汉字只认合法拼音音节，**拉丁字母 / 数字自成一节**（`C盘` → `c pan`、`P0` → `p 0`），

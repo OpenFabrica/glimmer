@@ -50,7 +50,7 @@
 - **通用词**：[liuxilu校对词表](https://github.com/liuxilu/Proofread-Modern-Chinese-Common-Lexicon)。读音仍需按输入法需求校验。
 - **领域词**：[THUOCL](https://github.com/thunlp/THUOCL)，采用[MIT许可证](00_meta/THUOCL_LICENSE.txt)，分发时保留版权及许可声明。
 - **网络用语与聊天短语**（微明加的，`04_internet_slang/slang_words.tsv` 与 `mixed_words.tsv`）：起草者（Claude）自身的中文互联网知识，没有抄任何外部词表，**不引入新的许可约束**；次数按三档固定值给，部分取微明语料的成分二元合成次数；做法与数字见[internet-slang.md](../../docs/notes/internet-slang.md)。
-- **补充常用词**（微明加的，`common_words.tsv`）：词库缺的常用词，候选来自[CC-CEDICT](https://www.mdbg.net/chinese/dictionary?page=cc-cedict)（MDBG，[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)）与[jieba](https://github.com/fxsjy/jieba)词表（MIT），次数由微明语料统计合成，逐条人工审定并核对读音；做法见[GLIMMER.md](GLIMMER.md)第4f步。
+- **补充常用词**（微明加的，`common_words.tsv`）：词库缺的常用词，候选来自[CC-CEDICT](https://www.mdbg.net/chinese/dictionary?page=cc-cedict)（MDBG，[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)）与[jieba](https://github.com/fxsjy/jieba)词表（MIT），次数由微明语料统计合成；第一轮（2026-09-17）逐条人工审定，第二轮（2026-10-19）放宽门槛，另收起草者（Claude）凭自身知识按界面 / 购物 / 聊天 / 办公 / 生活服务列的常用说法（没有抄任何外部词表），由 LLM 分批初审、两位审核员细查，未经人工逐条复核；读音都逐条核对；做法见[GLIMMER.md](GLIMMER.md)第4f步与[common-words.md](../../docs/notes/common-words.md)。
 
 英文来源为ESDB、CSpell和typos，许可声明见[英文sources](05_english/README.md#sources)。
 

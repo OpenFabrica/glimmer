@@ -57,7 +57,7 @@ cargo run --release --locked -p glimmer-dict-convert -- ai \
 
 `terms.tsv`、`names.tsv` 和 `domains/*.tsv` 一起校验后打包。输出：
 
-- `data/generated/dicts/ai.tsv` / `ai.qj`：可加载词库；相对仓库主词库去重后 8,179 条。
+- `data/generated/dicts/ai.tsv` / `ai.qj`：可加载词库；相对仓库主词库去重后 7,726 条（2026-10-19）。
 - `data/generated/ai-audit.tsv`：人工权重、真实正文次数、最终权重、加入或已存在状态。
 - `data/generated/ai-coverage.tsv`：主词库、可选 IT 词库、主英文表的覆盖情况，以及英文同码其他词；参考表缺失标为 `unknown`。
 

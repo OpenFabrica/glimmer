@@ -57,6 +57,8 @@ cargo run --release -p glimmer-dict-convert -- bigram --phrases assets/lexicon/p
 #     见 docs/notes/common-words.md。gaps 拿许可清楚的外部词表当白名单（CC-CEDICT CC BY-SA 4.0、jieba dict.txt MIT，都不进仓库，用时现下），
 #     列出词库与语言模型都没有的词，次数按 lm.qj 里成分二元合成（与 --phrases 同一公式）；人工审过拷进 common_words.tsv。
 #     和 domain_words 一样走 lexicon --extra-words 与 bigram --phrases（上面两条命令已带上）。
+#     第二轮（2026-10-19）门槛放宽到 CEDICT ≥ 50 次、jieba 独有词 ≥ 150 次，另审 CEDICT 20–49 次的词与叠字；人工清单（每行一个词）用
+#     gaps --min-count 0 合成次数，不到 20 按 20；第一轮丢掉的词不收，审核与数字见 common-words.md「第二轮」。
 curl -sSL https://www.mdbg.net/chinese/export/cedict/cedict_1_0_ts_utf-8_mdbg.txt.gz | gunzip | grep -v '^#' \
   | awk '{ s=$0; if (match(s, /\[[^]]*\]/)) { py=substr(s, RSTART+1, RLENGTH-2); if (py ~ /[A-Z]/) next; gsub(/u:/, "v", py); gsub(/[0-9]/, "", py); print $2 "\t" py } }' > data/generated/cedict-words.tsv
 curl -sSL https://raw.githubusercontent.com/fxsjy/jieba/master/jieba/dict.txt | cut -d' ' -f1 > data/generated/jieba-words.txt
