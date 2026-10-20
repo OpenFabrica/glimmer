@@ -4,9 +4,9 @@
 
 微明（Glimmer）是一个使用 **Rust** 开发的跨平台输入法。
 
-https://github.com/user-attachments/assets/d145fde9-a641-4543-8b15-dd7a2685de3d
+[![观看微明 Glimmer 宣传视频](https://i.ytimg.com/vi/MIi0LcrmQmQ/maxresdefault.jpg)](https://www.youtube.com/watch?v=MIi0LcrmQmQ)
 
-上面这段话全部由微明在 macOS 上输入：整句拼音一口气敲完，停顿一下由本地小模型重排候选，候选旁附英文译文与词性。
+[观看 45 秒宣传视频](https://www.youtube.com/watch?v=MIi0LcrmQmQ)：了解候选译词、本地整句、习惯学习与隐私保护。视频中的输入界面为动画演示示意。
 
 它的目标不只是「把拼音转换成中文」，而是让输入本身成为一种轻量、持续、几乎没有额外负担的语言学习方式。
 
