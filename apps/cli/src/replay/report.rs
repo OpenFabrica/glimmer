@@ -64,6 +64,7 @@ impl Report {
             InputSource::Custom
             | InputSource::Cloud
             | InputSource::CloudSentence
+            | InputSource::EnglishPrediction
             | InputSource::Raw
             | InputSource::Translation => None,
         }

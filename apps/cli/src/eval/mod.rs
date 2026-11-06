@@ -9,6 +9,7 @@
 mod bucket;
 mod chunk;
 mod context;
+pub mod english;
 mod extract;
 mod pair;
 mod report;

@@ -73,6 +73,11 @@ pub struct Args {
     #[arg(long)]
     pub english_mode: bool,
 
+    /// 手看英文下一词预测（自带英文模式）：每个输入是一串词（`"how are"`），逐个上屏并敲空格，
+    /// 打印预测与概率，再连按几次 Tab 看接受后的预测；要看前几个用 `--tune en-predict-count=3`
+    #[arg(long)]
+    pub english_next: bool,
+
     /// 打开中文优先（配置 [general] chinese_first = true）：整段是英文词时中文候选排第一、英文第二，评测两种排法用
     #[arg(long)]
     pub chinese_first: bool,
@@ -97,6 +102,15 @@ pub struct Args {
     /// 缺省 data/generated；给了就不动 data/generated 里那份
     #[arg(long)]
     pub lm: Option<PathBuf>,
+
+    /// 英文语言模型（`lm-en.qj`），英文候选按上文打分。缺省 data/generated/lm-en.qj；文件不在就按词频排（正常降级），
+    /// 量降级时给一个不存在的路径即可
+    #[arg(long)]
+    pub lm_en: Option<PathBuf>,
+
+    /// 英文误拼表（`误拼\t正确词`），英文候选里最便宜的一档纠错。缺省 data/generated/english-misspellings.tsv；不在就没有这一档
+    #[arg(long)]
+    pub english_misspellings: Option<PathBuf>,
 
     /// 神经重打分：字级 Transformer 的 .qjm 文件或导出目录（model.safetensors / config.json / vocab.json），整句前几条路径用它重排
     #[arg(long)]
@@ -138,7 +152,11 @@ pub struct Args {
     /// transpose / substitute / extra / missing / typo-cap / correction（敲错四类代价 / 个人折扣上限 / 整段纠错代价），
     /// initial（整句第一个词按上文算的成分）/ protect（原样成词保护多扣的代价）/ word（每词代价）/ whole（整句让整词的门槛，0 为不让）/ paths（重排路径数）/
     /// span（词图每格候选数）/ reading / reading-cap（多音字读音份额扣分的系数与封顶）/ choice / choice-cap（词级排序里同输入串选过的加分系数与次数封顶）/ lm-mode（静态模型回退：0 老的固定 λ、1 绝对折扣、2 绝对折扣 + 接续概率）/ lm-d3 / lm-d2（两层的折扣 D）/
-    /// lm-trigram（0 关掉三元那层，量三元自己的净效果）
+    /// lm-trigram（0 关掉三元那层，量三元自己的净效果）/
+    /// en-misspelling / en-near / en-edit / en-two / en-literal（英文候选的敲错代价：误拼表、便宜的一处错误、其他一处错误、两处错误、原样读法）/
+    /// en-typo-complete（纠错后还要再补字母的折扣）/
+    /// en-lambda-cap / en-lambda-half / en-k（英文个人份额的 λ 上限、λ 半值、K）/ en-domain（领域加分 nat）/ en-zipf-floor（词频换算的 Zipf 下限）/
+    /// lm-en-mode / lm-en-d3 / lm-en-d2 / lm-en-trigram（英文语言模型的平滑，含义同 lm-）
     #[arg(long, value_delimiter = ',')]
     pub tune: Vec<String>,
 
@@ -163,6 +181,33 @@ pub struct Args {
     /// 整句评测时给每条拼音注一处敲错（相邻键换位 / 敲到旁边的键，按句子哈希定，可复现）：量敲错纠正的召回
     #[arg(long)]
     pub eval_typos: bool,
+
+    /// 英文打字模拟评测：读英文文本（按空白切词、去掉两边标点，只评纯字母或带撇号的词），在英文模式下逐字母敲，
+    /// 报首选 / 前三省键率、敲 1–3 个字母的命中率、错字组、错前缀组、正常词被改错率、每键耗时、个人词回归与下一词预测；
+    /// 从空的学习数据开始、不学习、不写文件；可给多个文件，按顺序接起来评
+    #[arg(long, num_args = 1..)]
+    pub eval_english: Vec<PathBuf>,
+
+    /// 英文评测最多评前 N 个词（缺省全部）
+    #[arg(long, value_name = "N")]
+    pub eval_english_words: Option<usize>,
+
+    /// 英文评测注错用的种子：同样的文本与种子注出来的错一样，换种子换一批错
+    #[arg(long, value_name = "N", default_value_t = 1)]
+    pub eval_english_seed: u64,
+
+    /// 英文评测只跑这几组（逗号分隔）：complete 补全 / typo 错字组 / prefix 错前缀组 / cases 错前缀固定用例 /
+    /// space 正常词被改错 / personal 个人词回归 / predict 下一词预测（Tab 接受）；缺省全跑
+    #[arg(long, value_delimiter = ',', value_name = "组")]
+    pub eval_english_groups: Vec<crate::eval::english::Group>,
+
+    /// 错前缀固定用例表（`敲的\t期望词`）
+    #[arg(long, default_value = "tools/eval/english/prefix-typos.tsv")]
+    pub eval_english_cases: PathBuf,
+
+    /// 个人词回归用例表（七列，格式见文件头）
+    #[arg(long, default_value = "tools/eval/english/personal.tsv")]
+    pub eval_english_personal: PathBuf,
 
     /// 先从这些中文文本里学个人 n-gram（按语言模型切词、逐词记转移），再做后面的事；给了 `--user-dict` 就随退出落盘
     #[arg(long, num_args = 1..)]

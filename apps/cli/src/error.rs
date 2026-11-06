@@ -48,6 +48,9 @@ pub enum CliError {
     Eval(#[from] crate::eval::EvalError),
 
     #[error(transparent)]
+    EvalEnglish(#[from] crate::eval::english::EnglishEvalError),
+
+    #[error(transparent)]
     LearnText(#[from] crate::learn_text::LearnTextError),
 
     #[error(transparent)]

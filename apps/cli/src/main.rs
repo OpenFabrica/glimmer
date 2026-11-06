@@ -9,6 +9,7 @@ mod error;
 mod eval;
 mod learn_text;
 mod logging;
+mod next_word;
 mod repl;
 mod replay;
 mod rescoring;
@@ -18,7 +19,7 @@ use std::time::Instant;
 
 use clap::Parser;
 use glimmer_core::{EmojiTable, Engine, FuzzyRules, Language};
-use glimmer_dictionary::{Dictionary, WordList};
+use glimmer_dictionary::{Dictionary, Misspellings, WordList};
 use glimmer_learning::FrequencyLearner;
 use glimmer_lm::NgramModel;
 use glimmer_platform::{Config, Scheme};
@@ -69,12 +70,30 @@ fn run() -> Result<(), CliError> {
         print!("{report}");
         return Ok(());
     }
+    if !args.eval_english.is_empty() {
+        // 引擎里那份词表拿不出来，判断「词表里有没有这个词」另读一份
+        let words = english_path(&args).map(WordList::from_path).transpose()?;
+        let options = eval::english::Options {
+            paths: args.eval_english.clone(),
+            words: args.eval_english_words,
+            seed: args.eval_english_seed,
+            groups: args.eval_english_groups.clone(),
+            prefix_cases: args.eval_english_cases.clone(),
+            personal_cases: args.eval_english_personal.clone(),
+            show_misses: args.misses,
+        };
+        let report = eval::english::run(&mut engine, words.as_ref(), &options)?;
+        print!("{report}");
+        return Ok(());
+    }
     if args.inputs.is_empty() {
         repl::run(&mut engine, args.limit)?;
     } else {
         for input in &args.inputs {
             println!("> {input}");
-            if args.typing {
+            if args.english_next {
+                next_word::show(&mut engine, input);
+            } else if args.typing {
                 display::show_typing(&mut engine, input);
             } else {
                 display::show(&mut engine, input, args.limit);
@@ -127,6 +146,53 @@ fn load_config(args: &Args) -> Result<Config, CliError> {
     Ok(config)
 }
 
+/// 英文词表路径：`--english` 给了用它，否则 data/generated/english.tsv 存在就用它，都没有为 `None`（不启用英文）。
+fn english_path(args: &Args) -> Option<std::path::PathBuf> {
+    args.english.clone().or_else(|| {
+        let path = args::default_data_file("english.tsv");
+        path.is_file().then_some(path)
+    })
+}
+
+/// 英文语言模型与误拼表：`--lm-en` / `--english-misspellings` 给了用它，否则 data/generated/ 下的同名文件；
+/// 文件不在就跳过（英文候选按词频排、没有误拼表那一档），与输入法里一样正常降级。
+fn with_english_extras(args: &Args, mut engine: Engine) -> Result<Engine, CliError> {
+    let generated = std::path::Path::new("data/generated");
+    let model_path = args
+        .lm_en
+        .clone()
+        .unwrap_or_else(|| generated.join("lm-en.qj"));
+    if model_path.is_file() {
+        let started = Instant::now();
+        let mut model = NgramModel::from_path(&model_path)?;
+        model.set_smoothing(tuning::english_smoothing(&args.tune)?);
+        tracing::info!(
+            path = %model_path.display(),
+            words = model.word_count(),
+            bigrams = model.bigram_count(),
+            trigrams = model.trigram_count(),
+            smoothing = ?model.smoothing(),
+            load_ms = started.elapsed().as_millis(),
+            "英文语言模型已加载"
+        );
+        engine = engine.with_english_lm(Box::new(model));
+    } else {
+        tracing::info!(path = %model_path.display(), "没有英文语言模型，英文候选按词频排");
+    }
+    let table_path = args
+        .english_misspellings
+        .clone()
+        .unwrap_or_else(|| generated.join("english-misspellings.tsv"));
+    if table_path.is_file() {
+        let table = Misspellings::from_path(&table_path)?;
+        tracing::info!(path = %table_path.display(), pairs = table.len(), "英文误拼表已加载");
+        engine = engine.with_english_misspellings(table);
+    } else {
+        tracing::info!(path = %table_path.display(), "没有英文误拼表");
+    }
+    Ok(engine)
+}
+
 /// 组装 Engine：这是 Core 之外唯一知道具体 Translator / Learner 类型的地方。
 fn build_engine(args: &Args) -> Result<Engine, CliError> {
     let language: Language = args
@@ -152,10 +218,7 @@ fn build_engine(args: &Args) -> Result<Engine, CliError> {
     let started = Instant::now();
     let glossary = Glossary::from_path(language, &glossary_path)?;
     let glossary_load = started.elapsed();
-    let english_path = args.english.clone().or_else(|| {
-        let path = args::default_data_file("english.tsv");
-        path.is_file().then_some(path)
-    });
+    let english_path = english_path(args);
     let started = Instant::now();
     let english = english_path.as_ref().map(WordList::from_path).transpose()?;
     let english_load = started.elapsed();
@@ -255,6 +318,7 @@ fn build_engine(args: &Args) -> Result<Engine, CliError> {
         );
         engine = engine.with_language_model(Box::new(model));
     }
+    engine = with_english_extras(args, engine)?;
     if let Some(dir) = &args.neural {
         let started = Instant::now();
         let scorer = glimmer_neural::CharScorer::load(dir)?;

@@ -1,0 +1,8 @@
+# 个人词回归用例（glimmer-cli --eval-english 的 personal 组）。七列，Tab 分隔：
+# 名字	背景记录数	个人词	选词时敲的	选过次数	查的前缀（逗号分隔）	要求
+# 每条从空的内存学习器开始：先造「背景记录数」条无关的英文上屏（两个字母的前缀轮着选），
+# 再敲「选词时敲的」选个人词若干次（候选里没有就整词敲完回车原样上屏），最后在每个前缀上看排序。
+# 要求：first = 个人词排第一；below:<词> = 个人词不能压过这个词（它要在候选里而且排在个人词前面）。
+误选过一次的词	0	helloWorld	hellow	1	hel	below:hello
+上千条记录后再误选一次	1000	helloWorld	hellow	1	hel	below:hello
+长期常用的个人词	1000	openfabrica	openf	20	openf,openfa	first
