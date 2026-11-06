@@ -22,6 +22,7 @@ README.md 只介绍项目，所有技术内容放在这里，分四类：前三�
 | [plan/zh_tw_support_plan.md](plan/zh_tw_support_plan.md) | 繁体输出与台湾注音支持的分析与方案（贡献者 pinchiu，#22）：读音标准差异、台湾用语、简转繁一对多；两条路线 |
 | [plan/wubi.md](plan/wubi.md) | 五笔支持方案（2026-09-16 起草，2026-09-17 补三版）：码表选型与许可（86 rime-wubi LGPL、98 yanhuacuo/98wubi 含词表 LGPL、新世纪 wubixinshiji）、按 fcitx5 / librime 缺省定的行为、复用 Dictionary 的架构与分步实施；三个版本都已落地，`z` 通配 / 历史造词 / 双拼反查在第二阶段 |
 | [plan/todo.md](plan/todo.md) | 待办清单，按「从自用到能给别人用」排 |
+| [plan/model-eval.md](plan/model-eval.md) | 模型假设与验证尺子：日志格式、各假设用什么指标与基线、英文输入与下一词预测的打字模拟（`--eval-english`）数字、已知的尺子偏差 |
 | [notes/development-lexicon.md](notes/development-lexicon.md) | AI 与开发词库扩充的覆盖盘点、独立验收、性能及交付边界 |
 | [notes/crate-notes.md](notes/crate-notes.md) | 各 crate / app / tool 的实现要点：入口类型、数据文件、常数、生成命令 |
 | [notes/upstream-sync.md](notes/upstream-sync.md) | 同步上游 qingjian 的步骤（整树改名再 cherry-pick）、脚本用法、每次同步跳过了什么 |
@@ -32,7 +33,7 @@ README.md 只介绍项目，所有技术内容放在这里，分四类：前三�
 | [notes/internet-slang.md](notes/internet-slang.md) | 网络用语与聊天短语（2026-09-22）：候选表 752 条怎么并进词库、全量重跑 lexicon + bigram 两遍、含字母的词与 嗯 进不了词库的两个根因、冷查与整句回放的前后数字 |
 | [notes/multi-reading.md](notes/multi-reading.md) | 一词多读音（2026-09-22）：一行 打不出的两个根因（反推标注每词一个读音、底值词频永远切不出来）、多读音标注与合成计数、主读音为什么沿用旧版、前后数字 |
 | [notes/long-sentence.md](notes/long-sentence.md) | 长句准确率（2026-09-19）：按句长分桶的诊断、敲错边误伤与原样成词保护、整句接上文的权重怎么定、每词代价、从用户文本学个人 n-gram 的留出评测、试过不行的（束宽 / 每格候选 / 切分放开）与下一步 |
-| [notes/constant-sweep.md](notes/constant-sweep.md) | 排序常数扫描（2026-09-12）：插值与敲错代价在冻结日志上扫网格，全在平台区不改；没命中的构成与复现步骤 |
+| [notes/constant-sweep.md](notes/constant-sweep.md) | 常数扫描记录：排序常数（2026-09-12，插值与敲错代价扫网格，全在平台区）、同输入串选择加分、个人二元绝对折扣、整句让整词与 emoji 让位、英文候选与下一词预测的常数（`--tune en-…`、`sweep.sh` 英文模式）；各节带复现步骤 |
 | [notes/windows-win10.md](notes/windows-win10.md) | Windows 10 与设置程序（2026-09-13）：Reactor 早期绑定 Windows 11 才有的 AppModel API 导致加载期失败，改自包含部署 + 延迟加载 |
 | [notes/chromium-imk.md](notes/chromium-imk.md) | Chromium 系浏览器（2026-09-15）：flagsChanged 送两遍让 Shift 单击失效、换焦点先 activate 后 deactivate 让旧会话拆掉全局状态 |
 | [notes/imk-menu-null-action.md](notes/imk-menu-null-action.md) | IMK 输入法菜单（2026-09-16）：没有 action 的菜单项运行中一改显示状态，IMK 同步菜单时 `CFRelease(NULL)` 崩；所有项都绑选择器、状态行只改标题 |

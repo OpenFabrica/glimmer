@@ -76,7 +76,7 @@
 - [x] bundle id 改为 `app.glimmer.inputmethod`（2026-09-06，域名 glimmer.app 注册后；`TISInputSourceID` 与连接名同步，旧 id `com.yenharvey.glimmer` 的输入源要在系统设置里删掉重加）
 - [x] 中英切换：Caps Lock 亮着 = 英文模式（默认小写、Shift 大写、标点半角）；按住 Shift 的大写字母直接透传；切换输入源时强制收窗
 - [x] 英文模式候选（Core `english`，`Engine::set_english_mode`）：词表精确词 / 前缀补全 / 一处编辑纠正，Tab 与上下键选词（上下键动过之后空格也选），空格回车标点原样上屏；
-  `[general] english_candidates` 可关；CLI `--english-mode`
+  `[general] english_candidates` 可关；CLI `--english-mode`（2026-09-16 起空格与数字选词与中文一致；2026-11-06 起排序与纠错换成下面「英文输入改造」那套）
 - [x] 按应用关英文候选（2026-09-05）：`[apps] english_candidates_off`，按 `bundleIdentifier` 认，缺省终端 / 编辑器 / IDE 名单，`*` 前缀匹配；
   偏好设置「通用」页勾选框；`[apps]` 分节留给以后的按应用 preedit 模式
 - [x] 个人英文词表（2026-09-05，`user-english.tsv`）：回车 / 英文模式直通原样上屏的英文词（切不成完整拼音的字母串）与选过的英文候选都记，
@@ -84,6 +84,14 @@
 - [x] 中英混输：整段输入在英文词表里即出英文候选，作为拼音「不像话」时排第一，否则排第二（词表 2026-09-05 起来自 `assets/lexicon/05_english`，ESDB / CSpell，MIT）
 - [x] 英文补全：拼音不像话且 ≥ 3 个字母时出该前缀下最常用的 3 个英文词（词频 wordfreq），第一个字母就切不动的输入也出
 - [x] 英文直输段：组句中敲 `-` 后整段原样上屏（`no-way`），`-` 不再翻页
+- [x] 英文输入改造（2026-11-06，参照 Typeling 文章）：英文模式候选从「选过次数 → 词频」改成一个分数——英文三元语言模型（`lm-en.qj`，FineWeb / SODA / WildChat / Ubuntu IRC / oasst2 统计）
+  看前两个英文词的概率 × 敲错代价，池内归一化后与封顶 0.3 的个人份额混合；纠错改成噪声信道（邻键、对调、多敲、漏敲的变体当前缀查，误拼表 typos 最便宜，长词再试两处），
+  `tomm` → tomorrow；词表收撇号词、一码多词（`dont` → don't，`or` 不再变 OR），技术词词频给底值 Zipf 3；英文上文 `EnglishContext` 单独存、5 秒时效。
+  尺子是新的 `glimmer-cli --eval-english`（省键率、错字组、错前缀组、正常词被改错、个人词回归、每键耗时），语料按文档切成训练 / 调参 / 测试 / 验收四份，
+  基线冻结在 `data/eval/english/baseline/`（`plan/model-eval.md`「英文输入」）。每键耗时比改造前低；中文路径不变。
+  `lm-en.qj` 与误拼表随 `data-v9` 进包，见 todo
+- [x] 英文下一词预测（2026-11-07，Core `english::predict`）：英文词上屏、敲了空格之后候选窗口显示最可能的下一个词，Tab 接受、可以连按，其他键行为不变；
+  `[general] english_prediction` 可关；尺子是 `--eval-english` 的 `predict` 组，阈值 0.3 按调参集「出现率 vs 精确率」定（`plan/model-eval.md`「下一词预测」）
 - [x] emoji 候选（Core `emoji`，Unicode CLDR 中文 annotations，`assets/emoji/`）：紧跟对应词，右侧标注词；2026-10-19 起最早排第四，前三位留给字词
 - [x] 密钥：输入法进程读配置同目录的 `.env`（launchd 看不到 shell 环境变量）
 - [x] 学习语言、每页候选数、翻页键、外观、模式键从配置文件读取（`[general]` / `[shortcut]`），保存后自动热加载

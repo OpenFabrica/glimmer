@@ -10,6 +10,14 @@ CLAUDE.md 只保留目录地图与规则，每个 crate / app / tool 的实现�
 TSV 解析、查询与生成工具把 `lue` / `nue` 统一成 `lve` / `nve`。
 旧 `.qj` 含这些键时，加载器建立规范化的内存词库。新 `.qj` 继续使用 mmap。
 
+英文词表 `WordList`（`word_list/`，TSV `词\t编码[\t词频]`）：**一个编码可以对多个词**（`well` / `we'll` 同码 `well`），条目按编码字节序排好、同码保持文件先后，
+同码同词只留第一条；编码只管检索，词本身才是身份。编码缺省由 `english_code` 现算（ASCII 小写、去直撇 `'` 与弯撇 `’`：`don't` → `dont`、`I'm` → `im`），
+词表、语料工具与引擎只用这一个函数。查询：`get`（同码第一个，即缺省写法）/ `get_all`（同码全部）/ `prefix_span` / `prefix_range`（两次二分取前缀区间，不排序不分配）/
+`prefix_mass` / `span_mass`（词频前缀和表，O(1)）/ `prefix_top`（区间里词频前 N；1–2 个小写字母的 702 种前缀在加载时各算好前 `SHORT_PREFIX_TOP` 512，`short_top.rs`）/
+`next_bytes`、`matched_prefix_len`（敲错变体剪枝用）/ `complete`（中文模式英文补全仍用它）。`from_dictionaries` 从附加词库抽 `@` 编码的领域名称，那张仍是一码一词。
+`Misspellings`（`word_list/misspellings.rs`）是误拼表：无表头 TSV `误拼\t正确词`（第 3 列起忽略），误拼按小写存、加载时排序，一对多写多行；
+`corrections(误拼)` 精确查，`with_prefix(前缀)` 两次二分取「以它开头的误拼」区间。
+
 ## crates/glimmer-core
 
 模块：`composition` / `parser` / `correction`（拼写纠错：整段一处编辑的候选纠正 + `typo` 音节级敲错变体表，后者进整句词图当带代价的边）/
@@ -40,9 +48,8 @@ TSV 解析、查询与生成工具把 `lue` / `nue` 统一成 `lve` / `nve`。
   模式键与双拼一样走 `shifted()`，纠错门槛是作用域 > `MAX_CODE_LEN`（四码以内还可能是编码）。
   上屏时哪条是五笔候选由 `is_wubi_candidate` 判：五笔候选只有一个「音节」且它以整段作用域开头（全码等长、前缀命中更长），拼音候选的音节要么更短要么不是前缀；
   正好重合的只有「单音节吃满整段」那种，两条路算出来的消耗与学习键一样）/ `emoji` /
-`english`（英文模式候选）/ `engine`（`query::EnglishTail`：句末英文词并入整句，`woxiangxuehaorust` → 我想学好rust，尾段也像拼音时按分数与拼音读法比）。
+`english`（英文模式候选：切词、键位、敲错变体、误拼表、检索、打分，见下）/ `engine`（`query::EnglishTail`：句末英文词并入整句，`woxiangxuehaorust` → 我想学好rust，尾段也像拼音时按分数与拼音读法比）。
 `Engine` 是对外唯一门面，`Translator` / `Learner` trait 在 `engine` 模块；词库是「主词库 + 附加词库（`set_extra_dictionaries`，同步抽取 `@` 编码的英文名称供补全）+ 用户词」的列表；繁体输出（`traditional` 开关与 `traditional_map` 映射）依赖 `ferrous-opencc`（`s2tw`）在出候选与上屏边界转换，内部保持简体。
-`Engine` 是对外唯一门面，`Translator` / `Learner` trait 在 `engine` 模块；词库是「主词库 + 附加词库（`set_extra_dictionaries`，同步抽取 `@` 编码的英文名称供补全）+ 用户词」的列表。
 - 中英混输的英文词位置：`Engine::set_chinese_first`（配置 `[general] chinese_first`，缺省关）关着时拼音不像话的输入英文排第一（`extras::insert_english`，
   用户老选中文词时仍让中文在前），开着时整句先插、英文词紧随其后排第二（`query_inner` 里两步的先后按开关掉转）；句末英文词并入整句（`EnglishTail`）不受它影响。
   缺省关是回放定的（9241 词 / 269 条英文上屏：缺省开英文首选 82.5% → 7.1%）。
@@ -96,8 +103,70 @@ TSV 解析、查询与生成工具把 `lue` / `nue` 统一成 `lve` / `nve`。
   有「每个音节都完整、末尾不是落单单字母」的变体时残尾变体不参与，免得 `keyyi` 的 可以 被 `ke yi y…` 抢走），
   纠正之间比较时换位减 `TypoCosts::correction_transpose_discount`（1 nat，CLI `--tune correction-transpose=`），与原样比不减；
   2026-09-15 回放 283 词 / 23 句：词首选 89.0%、整句 82.6%，与改前持平（折扣若也用在与原样比，`zhongwne` 会误纠成 中文，整句掉一条）。
+- **英文模式候选**（`english/`，入口 `english::suggest`，Engine 侧 `engine/query/mod.rs` 的 `query_english`，最多 `ENGLISH_MODE_CANDIDATES` 18 条）：
+  顺序固定为 检索 → 按词去重 → 打分 → 排序 → 精确词规则 → 大小写（`adapt_case`）→ 截断。中文模式的英文词与补全（`extras::insert_english`）不走这里，仍是精确词 + 词频前 3。只出一个英文词的三处——中文模式整段是英文词（`insert_english`）、句末英文词（`query/english_tail.rs`）、`v` 开头的表达式模式（`query/mod.rs` 的 `query_expression`，`very`）——都用词表的**缺省写法**（同码第一个，`WordList::get`），句末英文词「两个字母的尾段只认缩写词」也按缺省写法判断：中文模式打不出大写，敲小写不代表要小写（`api` → API、`google` → Google、`id` → ID、`may` → may、`or` → or）。
+  - **检索**（`english/pool/`）：一次最多 `MAX_POOL` 1024 个词打分，四路各自封顶：正常前缀 512（`WordList::prefix_top`，1–2 个字母取加载时算好的前 512）、
+    上文后继 256（三元按次数先取 128，二元补满）、个人 + 领域 128（个人按次数、领域按词频）、错字变体 128（按档分：误拼表 → `Near` → `Edit` → `TwoEdits`，同档按词频）。
+    编码正好等于敲的串的词（`well` / `we'll`）不占名额总在池里；敲的串没有任何补全、又有纠错候选时，敲的串本身作为原样读法进池（代价 `literal`）。
+    上文后继在 `english/successors/` 按（上文, 首字母）缓存（`SuccessorCache::prepare`）：后继段按词编号排，第一键扫一遍留首字母对得上的、按编码排好，同一个词后面每键两次二分取区间。
+  - **纠错**（噪声信道，`english/channel/`、`english/misspelling/`、`english/keyboard.rs`）：已敲的串按一处错误变形（邻键替换、相邻对调、多敲、漏敲），变体当**前缀**查（`tomm` → `tomo` → tomorrow）；
+    先过词表再限额（`valid_variants`：生成时就跳过已不可能的位置，留下的按（档、前缀下词频和）取前 `VARIANT_LIMIT` 64）；
+    代价档 `CostTier`：`Misspelling`（误拼表命中，敲的串正好是、或正是某个误拼的开头）< `Near`（QWERTY 邻键、相邻对调、双写字母多按少按）< `Edit` < `TwoEdits`；
+    两处编辑只在 8–12 个字母（`MIN_TWO_EDIT_LETTERS` / `MAX_TWO_EDIT_LETTERS`）且一处编辑一个变体都没留下时才试，13 个字母以上一处纠不回的不再纠（每次两处搜索约 1–1.3 ms：每个位置的前缀区间逐字收窄、只在小区间里二分，生成串复用缓冲区）；少于 4 个字母（`MIN_CORRECTION_LETTERS`）、带数字或符号的不纠。领域与个人词表也参与纠错。
+    同一段组句里走不通的编码记在 `english::DeadEnds`（`english/dead_ends.rs`，Engine 的 `english_dead`）：一个候选都没有、且 `english::stays_empty` 成立（8 个字母以上，或带数字符号）的串，往后加长整个查询跳过；8–12 个字母真的试过两处错误也没有变体的串，往后加长（含 13 个字母以上）不再搜一处 / 两处纠错，误拼表照查；13 个字母以上一处没结果时没试两处，不记这一条。两条成立的理由按长度分段写在 `dead_ends.rs` 与 `stays_empty` 的注释里。新一段组句、`set_input`、换附加词库（`set_extra_dictionaries`）时清空。
+  - **打分**（`english/score/`，公式写在模块注释，常数在 `ScoreParams::DEFAULT`）：`权重 = P_模型(词 | 上文) · 敲错代价`，`模型份额 = 权重 ÷ 池内权重和`；
+    `个人份额 = max(次数 − 1, 0) · 敲错代价 ÷ (池内这一项之和 + K)`；`λ = min(λ上限, 个人总次数 ÷ (个人总次数 + λ半值))`；
+    `分数 = ln((1 − λ)·模型份额 + λ·个人份额) + 领域加分`。先乘代价再归一化，几乎不可能的纠错候选不改变别的词的份额。
+    `P_模型` 是英文语言模型给 token（小写、留撇号）的概率，同 token 的几种写法（`us` / `US`）按词频分；模型不认识的词、没接模型时用 `10^(Zipf − 9)`（词表词频是 Zipf × 1000）。
+    纠错候选要再补字母（变体只是它的前缀、不正好是整词）时代价再乘 `typo_completion`：`recieve` 纠成 receive 不打折，纠成 received 打折。
+    缺省：误拼表 0.05、`Near` 0.01、`Edit` 0.003、`TwoEdits` 0.0001、原样读法 0.01、纠错再补字母折扣 0.1、λ上限 0.3、λ半值 50、K 2、领域加分 ln 100 ≈ 4.6 nat、Zipf 下限 3。
+    只选过一次的词个人份额为 0；模型份额超过约 0.43 的词个人词压不过（λ 封顶的结果，有意如此）。全部常数可 `--tune en-…`（见 apps/cli）。
+  - **精确词规则**（打分之后）：敲的字母**原样**（区分大小写）正好是某张词表里的一个写法 → 它第一（`or` 先于 `OR`，`well` 先于 `we'll`）；
+    它不是随包词表里与它「只差大小写」那一组的缺省写法（组里第一个，按语料定，见 tools/dict-convert 的 `english`）时，缺省写法排第二（`promote_default_form`：`id` → id、ID；`api` → api、API；`google` → google、Google），只对 `MIN_PROMOTED_DEFAULT_LETTERS` 2 个字母以上生效（单字母的大写写法 F、W 多是字母名，提前会在第一键挤掉 from、was）；敲的就是缺省写法时不变（`or` 后面不跟 OR）。
+    否则编码相同的词排最前（`dont` → don't，`im` → I'm，`i` → I），同码之间先按敲的大小写调整后正好相等的、再是只差大小写的、再按分数。
+  - **英文上文**（`engine/english_context/`，`EnglishContext`）：只记前两个英文词，不碰中文的上屏链。三种状态 `Unknown` / `SentenceStart` / `Words`，
+    对到模型的 `english::NgramHistory`：`Unknown` 只用一元（`Context.previous = None` 在 n-gram 里是句首，说不出「不知道」，所以另起一个类型），`SentenceStart` 是 `Context::START`，
+    只知道一个词且再前面不知道时 `NgramHistory::Previous`（只走二元、不补句首标记）。转移：选中英文候选或英文模式回车原样上屏、且是随包词表里的词 → 记下；
+    不是词表里的词、上屏中文 / emoji / 快捷候选、直通字母数字与 `-` `@` 这类 → 不知道；直通空格与逗号引号 → 不变；直通句末标点与回车 → 句首；
+    光标移动、失焦、中英切换（`set_english_mode` 真的变了）、组句外退格、壳报告的其他直通功能键（`Engine::break_english_context`）→ 不知道；
+    停手超过 `ENGLISH_CONTEXT_TIMEOUT` 5 秒后的第一个事件先作废再处理；Esc（`clear`）不变。直通字符的规则与训练切词共用 `english::char_break`。
+    放在 `EngineSession` 里随 `swap_session` 交换，两处 `discard_input` 清空。这次不读应用前文（`SurroundingText`）。
+  - **哪些事件到得了 Core**（2026-11-06 核对；到不了的靠 5 秒时效兜底）：
 
-`EngineSession` 保存可挂起的组句、标点、历史与学习链，`Engine::swap_session` 在同一个引擎里交换输入状态，共用词库与落盘服务。切换上下文时清除查询及异步预测缓存，并由平台恢复各自私密状态。
+    | 事件 | macOS（`imk/controller/`） | Windows TSF / Linux IBus、Fcitx5 |
+    |---|---|---|
+    | 组句外退格 | `deleteBackward:` → `note_backspace`；按词 / 按行删 → `break_chain` | 壳的过滤器（`would_eat` / `key/filter.rs` 的 `should_forward`）不转发 |
+    | 组句外回车 | `insertNewline:` → `note_passthrough('\n')`（句首） | 不转发 |
+    | 组句外方向、Home / End、翻页、Tab、Esc、向前删 | `handle_command` 其余 selector → `break_english_context` | 不转发 |
+    | ⌘ / ⌃（Ctrl / Alt / Win）组合键 | `event.rs` → `break_english_context` | 只转发组句中的修饰键 + 数字，其余不转发 |
+    | 鼠标按下 | `commit_raw` → `take_raw`：没在组句时作废上文，在组句时先原样上屏 | 没有鼠标与选区的 sink |
+    | 失焦 / 停用 / 切应用 | `commitComposition:` / `deactivateServer` → `break_chain` | Linux `focus_out` → `CloseSession`；Windows `OnSetFocus` 只在组句中发 `Commit`；换会话时 Router `ensure_focus` → `reset_composition` |
+    | 中英切换 | `switch_mode` → `break_chain` | 下一键 `set_english_mode` 变了即作废 |
+
+    `crates/glimmer-server/src/dispatch/key/input.rs` 里组句外功能键与组合键也调 `break_english_context`，但 Windows / Linux 的过滤器不送这些键，实际只有组句中不认识的功能键走到。
+    显示着下一词预测时例外：Windows / Linux 多送不带修饰键的 Tab，其余不送的键（单独的修饰键除外）发 `HideCandidates`，Router 照这些键本来的规则 `break_english_context`（见 crates/glimmer-server）。
+  - **下一词预测**（`english/predict/`，Engine 侧 `engine/next_word.rs`，2026-11-07）：词上屏、直通了空格、还没开始敲下一个词时，按英文上文给最可能的下一个词，Tab 接受。
+    - 做法（`predict::predict`）：候选来自 `LanguageModel::successors`——前两个词都知道（或前一个词在句首）时取三元后继、再并上前一个词的二元后继，
+      只知道前一个词（再前面不知道）时只取二元；三元、二元各按次数只留前 `SUCCESSOR_LIMIT` 128 条，去重后一次 `log_probs` 算带回退插值的概率，
+      从高到低取前 `count` 个能变回词表写法的（`display_form`：同 token 几种大小写取词频最高的，`i` → I；句末标记、短语层合成的 token 这类查不到的跳过），
+      第一名概率低于 `min_probability` 整个不出。扫后继时不查词表（上万条后继逐条编码加二分比扫本身还慢），只给最后留下的几个查。
+    - 128 怎么来的（常数文档里有实测）：`lm-en.qj` 上 600 个上文（词表最常见 300 个词 + 最常见 300 条二元当前两个词），全量算分时 `the` 的二元后继 10917 条、`of the` 另有三元 2403 条，
+      首次取最慢 1.7 ms、九成在 0.66 ms 以内；各留前 128 条后最慢 0.34 ms、九成在 0.13 ms 以内，前三名与全量一个不差（64 / 256 也不差）。
+      剩下的时间几乎都在模型列后继本身（`the` 一行约 0.23 ms，每条后继分配一个 `String`），与截多少无关。
+    - 常数 `PredictParams`（`predict/params.rs`）：`min_probability` 0.3、`count` 1（界面只让 Tab 接受第一个；评测看「如果给三个」时临时调成 3）。
+      `Engine::set_english_predict_params` 换，`--tune en-predict-min=` / `en-predict-count=` 扫。0.3 怎么定的见 `plan/model-eval.md`「下一词预测」。
+    - 缓存 `PredictionCache`：只记最近一个上文（键是 `NgramHistory::cache_key`）的结果，壳在轮询里反复问同一个上文不重算；
+      换英文模型、换词表、换参数时清（`engine/setup.rs`）。放在 `RefCell` 里，`english_predictions(&self)` 不改状态。
+    - 出预测的条件（`Engine::english_next_words`）：英文模式（壳只在英文候选开着、这个应用没被关掉时打开）、`english_prediction` 开着（`Engine::set_english_prediction`，配置 `[general] english_prediction`，缺省开）、
+      不在私密输入里（`Engine::set_private(true)` 时为空，Tab 交给应用；`engine/privacy.rs` 在值真的变了时 `break_english_context`，进出密码框都从不知道上文开始；私密里英文候选照常给，只是不学习、不预测）、组句为空、装了 `lm-en.qj` 与英文词表、`EnglishContext::predictable`——状态是 `Words`（不是 `Unknown` / `SentenceStart`，所以句首不出）、`after_space` 为真、没过 5 秒时效。
+    - `after_space`（`EnglishContext` 上的一位）：每个事件的 `touch` 先清掉，只有直通半角空格（`note_english_char(' ')`）置上；连敲几个空格仍为真。
+      逗号这类句中标点不改上文、但会清掉它，所以「词 逗号 空格」之后又是真。`clear()`（Esc）不是事件，不动它。
+    - 接受（`accept_english_prediction(index)`）：重算一次预测（过期了、上文变了返回 `None`，壳把 Tab 照常交给应用），按英文候选走 `commit_with`
+      （个人词频 +1、进个人英文词表、记进英文上文；输入日志 `source` 是 `english_prediction`、`keys` 为空，先清掉上一次查询的摘要免得写进这条），
+      再 `note_passthrough(' ')`，返回「词 + 空格」。壳不要再为这个空格调 `note_passthrough`。之后上文前移一个词、`after_space` 为真，马上能取下一个。
+      输入统计按英文词记、不算中文词；回放（`--replay`）把这个来源计入 `skipped` 不评。
+
+`EngineSession` 保存可挂起的组句、标点、历史与学习链（以及英文上文），`Engine::swap_session` 在同一个引擎里交换输入状态，共用词库与落盘服务。切换上下文时清除查询及异步预测缓存，并由平台恢复各自私密状态。
 
 `Engine::discard_input` / `EngineSession::discard_input` 用于隐私能力变化时无痕清理输入，包括透传缓冲、学习链和暂存词汇曝光；`set_private` 只切换写入开关，保留已输入的组句。
 
@@ -109,7 +178,7 @@ TSV 解析、查询与生成工具把 `lue` / `nue` 统一成 `lve` / `nve`。
 ## crates/glimmer-learning
 
 - `FrequencyLearner`：用户选择次数（`user.tsv`）、按输入串记的选择（`user-choices.tsv`，词级排序里同输入串、同位置选过的次数换成得分加分，格式与迁移见下）、用户词（`user-words.tsv`，主词库同格式，
-  Engine 与主词库一起查）、个人英文词（`user-english.tsv`，回车原样上屏的英文词与选过的英文候选，与随包英文词表一起出候选且在前）、
+  Engine 与主词库一起查）、个人英文词（`user-english.tsv`，`词\t次数`，回车原样上屏的英文词与选过的英文候选，与随包英文词表一起出候选；内存里的 `WordList` 编码与随包词表一样用 `english_code` 去撇号，学过 `don't` 之后敲 `dont` 能从个人表出来，`dont` 与 `don't` 各记各的次数，已落盘的文件不用迁移）、
   个人敲错表（`user-typos.tsv`，接受过的 (敲的, 要的) 音节对，词图敲错边与整段纠错的代价按它打折）与个人 n-gram（`user-ngram.tsv`，Core `sentence::UserNgram`，
   二元 + 三元在线计数，整句转换与词级排序里与静态模型插值；Tab 接受的云端整句按 `sentence::segment_text` 切词后也记；
   连着选出的两个词记够次数自动造词进用户词，一段拼音分几次选完的合成词记两次也造）。
@@ -201,6 +270,12 @@ Core `sentence::LanguageModel` trait 的实现，从 `data/generated/lm.qj`（�
 1 是绝对折扣 + 一元 c(w)/N、2 再把一元换成接续概率 N₁₊(·,w)/N₁₊(·,·)。数字与取舍见 `language-model.md`。
 `unigrams()` / `bigrams()` / `trigrams()` 按编号顺序导出全部计数，`dict-convert supplement` 用它在已有 `lm.qj` 上补词（三元原样带走）。
 
+英文模式另装一个实例（`lm-en.qj`，`Engine::with_english_lm`），用 `LanguageModel` trait 上两个有缺省实现的方法（中文路径不调它们）：
+`log_probs(history, words)` 是同一上文一批词的打分（`model/batch/`，上文那一侧的后继段与计数和只求一次，式子与逐词的 `score.rs` 有测试对拍），
+`NgramHistory::Unknown` 只用一元最大似然 c(w)/N，`NgramHistory::Previous` 只走二元、不补句首标记；
+`successors(history, keep)` 按上文列后继（三元段、句首二元或前一个词的二元，不回退），给英文候选池的「上文后继」那一路与下一词预测（`english::predict`）。
+它给每条后继分配一个 `String`，`the` 这类常见前词一次约 0.23 ms 花在这里；要更快得在这里加「按次数取前 K」（`todo.md`）。
+
 ## crates/glimmer-platform
 
 `Config`（TOML 配置文件，`[general]` / `[shortcut]` / `[fuzzy]` / `[dictionaries]` / `[apps]` / `[predict]` 分节，首次运行写模板，
@@ -213,11 +288,21 @@ Core `sentence::LanguageModel` trait 的实现，从 `data/generated/lm.qj`（�
 
 ## crates/glimmer-server
 
-输入法 Server 的平台无关部分，从 `apps/windows/server` 抽出，Windows Server 进程与 Linux IBus 引擎进程共用：`assembly`（按 `AssemblySpec` 装配 Engine：词库 / 释义 / 学习 / 语言模型 / 五笔码表——`WubiSpec` 给版本 + `[wubi]` 选项，`load_scheme` 按 `Variant::data_file()`
+输入法 Server 的平台无关部分，从 `apps/windows/server` 抽出，Windows Server 进程与 Linux IBus 引擎进程共用：`assembly`（按 `AssemblySpec` 装配 Engine：词库 / 释义 / 学习 / 语言模型 / 英文语言模型与误拼表（`english_lm` / `english_misspellings`，`startup` 在 `data/generated/` 找 `lm-en.qj` / `english-misspellings.tsv`，没有或读不了只记日志、英文候选按词频排）/ 五笔码表——`WubiSpec` 给版本 + `[wubi]` 选项，`load_scheme` 按 `Variant::data_file()`
 在主词库同目录找 `wubi86.qj` / `wubi98.qj` / `wubixsj.qj`，学习器按 `Variant::key()` 分子目录；配置热加载在 `dispatch/reload/wubi.rs`，开关或换版本才重开码表；
 拼音侧 `set_phonetic(scheme().is_on() || !engine.wubi_mode())`——配置说关但码表没装上时留着拼音兜底，所以要在五笔装完之后设）、
 `dispatch::Router`（`ClientMessage` → Engine → `ServerMessage` / `Frame`：多会话、按键、上屏、翻译选中文字、配置热加载、本地整句模型重排的节拍 `next_tick` / `tick`）、`error::ServerError`。
 不含传输与绘制：候选窗 / 状态条经 `CandidateSink` / `StatusSink` 由平台壳注入，默认不画。键码沿用 Windows 虚拟键码（VK）语义，Linux 端把 keysym 翻成 VK 再发。
+英文下一词预测（`dispatch/next_word.rs`）：出不出全问 Core，Router 只记一份显示态 `english_next`；私密另有一层同样的判断：`refresh_english_prediction` / `expire_english_prediction` 看 `Engine::is_private`，`dispatch/session/mod.rs` 的 `set_privacy` 在私密报告比空格晚到时把已显示的预测收起。什么算私密由壳报：Windows 输入范围 `IS_PASSWORD` / `IS_PRIVATE` / PIN 类，Linux purpose 为 PASSWORD / PIN 或带 `HINT_PRIVATE`；Chromium 无痕窗口里所有输入框都报私密，所以 Windows / Linux 的无痕窗口里也不出预测。每次按键处理完（含 Tab 接受）调 `refresh_english_prediction`，
+Core 给了就先收窗口、丢掉旧位置（等壳报来新插入点再画），`current_frame` 在没组句时给预测帧（`english_prediction_frame`：没有 preedit、候选是带释义的预测、高亮第一个、不分页）。
+协议的 `Frame` 没有专门的标记，各壳按 `dispatch::is_next_word_frame`（没有 preedit、候选全是英文词；翻译评审帧的译文是云端样式，不算）认预测帧，
+第一行序号用 `next_word_label`（`⇥`，其余为空，与 macOS 一致）。
+`handle_key` 先 `end_english_prediction`：显示着、而且用户看得见（`english_prediction_visible`：`CandidateSink::draws()` 区分 Server 自绘与壳自绘，Server 自绘（Windows）时要等插入点到了、窗口真画出了预测帧——上屏走异步编辑会话，位置晚到时 Tab 可能先到，没画出来时的 Tab 照常交给应用；壳自绘（Linux）随回话就算，IBus 串行、Fcitx5 同线程，没有这个窗口期）时，不带修饰键的 Tab 交给 `Engine::accept_english_prediction(0)`，接了回 `Consumed` + 「词 + 空格」并马上取下一个；
+其余键收起后照原来的路走，返回值与没有预测时一样；这个键之后不再取新预测（连敲第二个空格不把预测再弹出来）。壳不送来的键（空格、回车、Esc、退格、方向键、带修饰键的 Tab、Ctrl 组合……）
+由壳发现有的 `HideCandidates`，显示着预测时 Router 收起预测并照这些键本来的规则 `break_english_context`；单按修饰键壳什么都不发；`ModeChanged`、`ImeSwitched` 也收起。
+轮询 `Poll` 里 `expire_english_prediction`：Core 那边过了 5 秒时效就收起（同一上文 Core 有缓存，不重算）。
+Windows / Linux 空闲时的空格壳不送（过滤器只送空闲的标点与数字），Core 置不上 `after_space`：那边只在「组句中空格选词上屏」（`apply_english` 先 `commit_highlighted` 再把空格 `note_passthrough`）
+与 Tab 接受之后出预测，「词 逗号 空格」、数字键或回车上屏后再敲空格都不出（macOS 都出）。要支持就得每个空闲空格多一次进程间往返，这次没做（`todo.md`）。
 输入日志的会话条目（版本号 / 平台名）由壳用 `Router::set_log_identity` 设置。集成测试 `tests/engine_loop.rs` / `wubi_loop.rs` 用 `assets/sample/` 样例数据，全平台可跑。
 
 ## crates/glimmer-render
@@ -250,7 +335,35 @@ Core `sentence::LanguageModel` trait 的实现，从 `data/generated/lm.qj`（�
 - `--tune 名=值`（逗号分隔）覆盖个人 n-gram 插值（含整句接上文的权重 `initial`、每词代价 `word`、词图每格候选数 `span`）与敲错代价（含原样成词保护 `protect`）的常数扫网格
   （名字见 `apps/cli/src/tuning.rs`，Core 侧是 `Engine::set_interpolation` / `set_typo_costs`，壳只用缺省值）；
   `lm-mode` / `lm-d3` / `lm-d2` 换静态语言模型的回退方式与折扣，它们在建模型时就用上（`tuning::smoothing`），不走 `Engine`。
+  英文候选打分的常数是 `en-misspelling` / `en-near` / `en-edit` / `en-two` / `en-literal`（敲错代价五档）、`en-typo-complete`（纠错后再补字母的折扣）、`en-lambda-cap` / `en-lambda-half` / `en-k`（个人份额）、
+  `en-domain`（领域加分 nat）、`en-zipf-floor`（`Engine::set_english_score`）；下一词预测的是 `en-predict-min`（第一名概率下限）/ `en-predict-count`（给几个，`Engine::set_english_predict_params`）；英文语言模型的平滑是 `lm-en-mode` / `lm-en-d3` / `lm-en-d2` / `lm-en-trigram`（`tuning::english_smoothing`，与中文的 `lm-` 互不干扰）。
 - `--lm <目录或 lm.qj>` 换一份语言模型（目录里认 `lm.qj` 或 `lm-unigram.tsv` + `lm-bigram.tsv` + 可选 `lm-trigram.tsv`），评测新模型不必动 `data/generated`。
+- `--lm-en <lm-en.qj>` / `--english-misspellings <tsv>` 换英文语言模型与误拼表，缺省 `data/generated/lm-en.qj` / `english-misspellings.tsv`；文件不在就跳过（量降级时给一个不存在的路径）。
+  `--english-mode` 让查询走英文模式候选。
+- `--english-next <词…>` 手看下一词预测（`next_word.rs`）：每个输入是空格分开的一串词，逐个当英文候选上屏、各接一个直通空格，打印上文、首次与缓存取预测的耗时、预测与概率，
+  再连按最多 5 次 Tab 打印接受的词与当时的概率。每个输入从「不知道上文」开始。要看前几个配 `--tune en-predict-count=3`。
+- `--eval-english <文本>...` 英文打字模拟评测（`eval/english/`，规则写在 `mod.rs` 文件头，改了就重量基线）：英文模式下逐字母敲，每键问一次 Engine；
+  从空的内存学习器开始、评测中不学习、不写文件；要配一份 `[predict] enabled = false` 的配置。文本按空白切词、去两边标点，只评纯字母或带撇号的词，多个文件按顺序接起来。
+  - 计键写死：每个字母（含撇号）1 键、选中候选 1 键，词后的空格与标点两边都不计；8 个字母的词敲 2 个字母后选中 = 3 键。
+    目标词进窗口（首选组看第 1 个、前三组看前 3 个）、而且选它比接着敲省键才选；一直没出现就敲完上屏。
+    报两个数：「文章口径」敲完上屏不加键（与 Typeling 文章对比）；「实际按键」在首选不是它、又有候选时多算一下回车，可以为负，验收看它。
+  - 下一个词的上文是这一遍里真的经 Engine 上屏的字，词两边的标点与空格经 `note_passthrough` 告知，不拿原文充数。
+  - 七组（`--eval-english-groups complete,typo,prefix,cases,space,personal,predict`，缺省全跑）：`complete` 补全（首选 / 前三省键率，敲 1–3 个字母的首选与前三命中率，分母是比这更长的词）；
+    `typo` 错字组（每词注一处错：邻键替换 / 漏 / 多 / 对调，整个敲完不选词，看前三有没有原词，没有按「退格到错处 + 重敲」计键）；
+    `prefix` 错前缀组（4 个字母以上的词在前 3 个字母里注一处错接着敲，目标词一进前三就选，报第一次进前三时已敲几个字母与省键率）；
+    `cases` 错前缀固定用例（`--eval-english-cases`，缺省 `tools/eval/english/prefix-typos.tsv`，48 条 `敲的\t期望词`）；
+    `space` 正常词被改错（每个词整个敲完按空格，按「词表里有 / 没有」分开报，各拆「只改大小写 / 换成别的词」，另列小写词被改成大写的清单）；
+    `personal` 个人词回归（`--eval-english-personal`，缺省 `tools/eval/english/personal.tsv`，三条：误选一次的词不压过常用词、上千条记录后再误选一次同样、选过 20 次的个人词在它的前缀上第一）；
+    `predict` 下一词预测（`eval/english/predict/`，规则写在 `mod.rs` 文件头）：与补全组一样逐词敲，只多一步——每个词开敲前（词前标点直通之后）问一次 `Engine::english_next_words`，
+    走真实的出预测条件；第一个预测与目标词逐字相同（大小写也要一样）就按 Tab（`accept_english_prediction(0)`，计 1 键，这个词完成，Tab 带出的空格当词后空格），
+    不是或没出就照补全组敲、不加键（猜错不扣键，量不出「打扰」）。首选、前三两行都带预测这一步，一遍里同时算。词后紧跟标点的命中只单独报次数，不计退格。
+    另报：出现率（分母全部词位）、精确率（命中 / 出现）、命中占全部词位、「如果给三个」（出了预测的词位临时把 `count` 调成 3 再问一次，看目标词在不在前三，只作参考）、
+    连续命中段（连着按 Tab、中间只隔 Tab 带出的空格）长度 1 / 2 / 3 以上各几段与最长一段、取预测耗时（每个能出的词位第一次取，含扫后继与算分）。
+    这一组单独一遍，从空学习数据、不学习、没有上文开始，打开 `english_prediction`；5 秒时效在模拟里不会触发。
+    外加每键耗时 p50 / p95 / 最大，与两种最坏情况（只敲 1 个字母、12 个字母以上的错误输入）单独报。
+  - `--eval-english-words N` 只评前 N 个词；`--eval-english-seed N`（缺省 1）定注错，同样的文本与种子注出同样的错，限词数不改变前面那些词注的错。
+  - 语料与切分见 `tools/corpus`，冻结基线在 `data/eval/english/baseline/`（二进制、词表、配置、两张用例表、`BASELINE.md` 与完整输出，校验和 `SHA256SUMS`）。
+    扫常数用 `tools/eval/sweep.sh` 的英文模式（`constant-sweep.md`「英文候选常数」）。
 - `--eval-text <文本>...` 整句评测：把用户自己写的中文文本按标点切句、按词库读音转成全拼，冷启动喂给引擎看整句能不能还原原句
   （首选命中率 / 字准确率 / 查询耗时；不依赖日志里当时选了什么，给整句排序与语言模型的改动当尺子），`--eval-save` 冻结成 `句子\t拼音\t上文` 三列文件，
   之后直接 `--eval-text` 它保证比的是同一份句子（本机的在 `data/eval/sentences.tsv`）。排序、整句、纠错的改动先跑它们再合。
@@ -273,7 +386,7 @@ IMK 输入法，源码按 `app / host / imk / candidates / menubar / preferences
 - 日志在 `~/Library/Logs/Glimmer/`（按天分文件留 7 天，删了会重建），用户数据与配置在 `~/Library/Application Support/Glimmer/`。
 - 配置项：云联想 `[predict]`（偏好设置「云服务」页有「测试连接」按钮：`glimmer_predict::ConnectionTest` 起线程发一条最小请求，`Host` 用独立定时器 `CloudTestMonitor` 轮询结果显示到窗口底部；
   `reasoning_effort` 缺省 `none`，DeepSeek V4 默认思考，不关正文为空）；模糊音 `[fuzzy]` 默认都关；`[general]` 学习语言（`off` 不显示译文）/ 译词读音 `translation_reading`（关掉时 `Engine::annotate` 去掉音标 / 假名）/ 每页候选数 / 翻页键 / 外观 / 竖排横排 / 拼音显示位置 /
-  英文模式候选开关 / 中文优先 `chinese_first` / 中文模式英文词候选 `mixed_english_candidates` / emoji 候选 `emoji_candidates` / 拼音方案 `scheme`（`pinyin` 全拼 / 小鹤 / 自然码 / 微软 / 搜狗 / 小浪 / 智能ABC / `zhuyin` 大千注音 / `none` 关；空串时回落到旧键 `shuangpin` / `zhuyin`，老配置照常）/ 五笔 `wubi`（空为关，`86` / `98` / `xsj`，与拼音方案是两条轴、都开就是混输；行为在 `[wubi]`：`auto_select` / `hint` / `fixed_order_length`，
+  英文模式候选开关 / 下一词预测 `english_prediction`（「通用」页「预测下一个词」，英文候选关着时置灰）/ 中文优先 `chinese_first` / 中文模式英文词候选 `mixed_english_candidates` / emoji 候选 `emoji_candidates` / 拼音方案 `scheme`（`pinyin` 全拼 / 小鹤 / 自然码 / 微软 / 搜狗 / 小浪 / 智能ABC / `zhuyin` 大千注音 / `none` 关；空串时回落到旧键 `shuangpin` / `zhuyin`，老配置照常）/ 五笔 `wubi`（空为关，`86` / `98` / `xsj`，与拼音方案是两条轴、都开就是混输；行为在 `[wubi]`：`auto_select` / `hint` / `fixed_order_length`，
   码表 `Resources/wubi86.qj` / `wubi98.qj` / `wubixsj.qj` 三份都随包，按版本装一份，偏好设置「通用」页的「五笔」弹出菜单四项（关 / 86 / 98 / 新世纪）由 `Variant::ALL` 出，
   壳每次 `push` 后先 `take_auto_commit`）/ 日志级别 `log_level`（缺省 info 不含敲的内容，debug 逐键记，热切换）/ 输入日志 `input_log`；
   `[shortcut]` 模式键 v / u、`question_mark`（缺省关，开了空缓冲区敲 `?` 进问字）、上屏第一 / 第二个译词的修饰键 `translation` / `translation_second`、删候选 `delete_candidate`（缺省 shift，用户词整删、词库词清学习）、翻译选中文字 `translate_selection`、macOS 中英文切换 `mode_switch`（缺省 `shift` 单击，也支持旧版修饰键加字母，不能与翻译键冲突）；
@@ -292,6 +405,14 @@ IMK 输入法，源码按 `app / host / imk / candidates / menubar / preferences
 - 检查更新（`host/update/`）：`init` 末尾 `schedule_auto_update_check` 排两只定时器（30 秒一次性 + 12 小时重复），响了走 `auto_update_check`（`[update] check` 开着且 `~/Library/Application Support/Glimmer/update-check` 超过 `CHECK_INTERVAL` 才起 `UpdateCheck`；网络全在它的线程里，主线程一次也不等），
   `UpdateMonitor` 0.2 秒轮询；有新版本菜单版本行变「微明 x（新版本 y 可用）」、「关于」页三行状态 + 「下载并安装」（`Download` 下到数据目录 `updates/`，校验过 `open` pkg 交给 Installer.app）；
   菜单「检查更新…」跳到「关于」页（`preferences::ABOUT_PAGE`）手动查。自动查失败不出声，手动查才报错。
+- 英文下一词预测（`host/next_word/`、`imk/controller/next_word.rs`）：出不出、出什么全问 Core，壳只管画与 Tab。显示阶段 `NextWordPhase`：`Idle` / `Pending { visible }` / `Showing`。
+  直通空格（`imk/controller/mod.rs` 里 `note_passthrough(' ')` 之后）与 Tab 接受之后调 `request_next_word`：Core 有预测就进 `Pending`、开 `NextWordMonitor`（50 ms 重复的 `NSTimer`）。
+  不当场画：空格要等 `handleEvent` 返回 false 才进应用，这时取插入点会差一个空格；定时器下一拍读插入点（放开 Host 借用去读，IMK 可能重入）再画，所以预测比空格晚约 50 ms 出现。
+  之后每拍问一次 Core 还有没有（过期、Caps Lock 切回中文、Secure Input 都会没），没了回 `Idle` 停表、清会话、收窗。
+  `intercept_next_word` 在按键分发最前面：`accepts_tab()`（窗口上挂着预测：`Showing`，或 Tab 接受后下一个还没画出来的 `Pending { visible: true }`）且按的是不带修饰键的 Tab（键码 48）时让 Core 接受、`insert_text`「词 + 空格」、再取下一个；
+  空格后不到 50 ms 就按的 Tab（`Pending { visible: false }`）、Core 不接的 Tab、其他键都先收起预测再照原路走（Tab 走 `handle_command`，照旧作废英文上文）。
+  鼠标、失焦、`activateServer` / `deactivateServer`、切中英、组句作废、panic 善后都收起。窗口借用候选会话（`reset_session(None, 预测)`），第一行序号画成 `⇥`、其余不标（`presenting::label_next_word_rows`）。
+  密码框不出：`next_word_available` 看 Secure Input 与当前是否英文模式，其余条件在 Core。
 - 端到端验证可用 `osascript` 的 System Events 往 TextEdit 发按键再读回文本（终端需要辅助功能权限；输入法得在中文模式）。
 - 中英文切换的状态、事件优先级与验证边界见 [macOS 中英文切换](../design/macos-mode-switch.md)。
 - macOS 安装后 `repair-input-cache.sh` 定向备份微信 / 企业微信中不含微明的旧键盘缓存；已包含微明则不动。工具随包放在 `Resources/`，不退出应用；已运行的应用需重启。见 [输入源缓存](input-source-cache.md)。
@@ -307,6 +428,13 @@ TSF 原有数字 / OEM 标点 / 空格键码按当前布局用 `ToUnicodeEx` 解
 拼音显示位置（`[general] preedit`）在 Windows 上分两处落地：Server 把它读进 `RouterConfig.preedit` 并随 `Frame.preedit_mode`
 下发给 DLL，DLL（`com/service/key_sink.rs`）按 `inline()` 决定要不要放行内拼音，Server（`ui/candidates/render_data.rs::window_preedit`）
 按 `in_window()` 决定候选窗口顶部画不画拼音行；`window` 模式没有组句范围，光标矩形改从 `com/edit/anchor.rs::caret_rect`（当前选区）量。
+英文下一词预测在 DLL 侧只是「多吃一个 Tab」（`com/service/key_sink.rs`）：响应帧是预测帧（`composition::is_prediction`，抄的 Server `is_next_word_frame`，DLL 不能带 Server 的依赖树）时记 `Shared::predicting`，不开 TSF 组句；
+显示着时 `would_eat` 多吃不带修饰键的 Tab（`key/event.rs::is_plain_tab`），其余键吃不吃与没显示时一样，不吃的键（单独按下的修饰键除外，`is_modifier`）收起预测并发 `HideCandidates`；
+不吃的键框架不会再调 `OnKeyDown`，所以这一步放在 `OnTestKeyDown` 里，`OnTestKeyDown` 因此带了副作用（`would_eat` 本身仍无副作用）；
+键来自另一个文档上下文（点进了别的输入框）先收起，免得 Tab 把词插过去。轮询（`com/poll`）在显示着预测时也拉，帧空了（Server 判过期）就清标志。设置程序「通用」页有「预测下一个词（Tab 接受）」开关，英文候选关着时不可用。
+Server 的候选窗（`ui/candidates/render_data.rs`）按 `is_next_word_frame` 把第一行序号换成 `⇥`。空闲空格 `would_eat` 不吃，所以「词 逗号 空格」这类情形不出预测（见 crates/glimmer-server）。
+设了 `KEYBOARD_DISABLED` / `EMPTYCONTEXT` 的上下文（Chromium 系真正的密码框，`com/context.rs`）键根本不送 Server，自然不出。
+已知限制：同一个输入框里用鼠标点到别处 TSF 收不到通知，预测留到 5 秒过期，这期间按 Tab 会把词插到新光标处；彻底修要加 `ITfTextEditSink`（`todo.md`）。
 连不上 Server 时 DLL 自己拉起它（`tsf/src/com/service/launch.rs`）：`ShellExecuteW` 起与 DLL 同目录的 `glimmer-server.exe`
 （`uiAccess=true` 的 exe 用 `CreateProcess` 报 740），进程内 5 秒冷却 + 跨进程命名互斥体防止砸出一串 Server；
 起完清掉重连退避，下一键就试。Server 只在登录时由「启动」文件夹拉起，中途挂了以前只能等下次登录。
@@ -322,6 +450,11 @@ Server 每次轮询比对用户 `dicts\` 的路径 / mtime / 长度快照，配�
 IBus 引擎进程 `glimmer-ibus`（package `glimmer-linux`），设计见 `docs/design/architecture.md`「Linux：IBus / Fcitx」。
 
 - 分层：`ibus/`（zbus 连私有总线、导出 Factory / Engine、IBus 对象的变体编码）→ `frontend/`（与 D-Bus 无关的会话状态机，`Frame` → preedit / 候选表）→ `backend/`（`Backend` trait：`RouterBackend` 是真后端，`EchoBackend` 只验链路）；`key/` 是 keysym → VK 与单击 Shift 判定；`startup.rs` 是 XDG 路径、配置模板与日志。
+- 英文下一词预测：前端（`frontend/`）按 `view::is_prediction`（没有 preedit、有候选）认预测帧，它不算组句、不碰应用里的 preedit；
+  送键规则照没在组句，只多送一个不带修饰键的 Tab（`key/filter.rs::accepts_prediction`），不送的键（单独的修饰键除外，`is_modifier`）通知 Server 收起；轮询在预测显示期间开着。
+  IBus 与 Fcitx5 两条路一样（`tests/prediction.rs` 用按脚本答复的假 Router 测）。`view::is_prediction` 就是 Server 的 `is_next_word_frame`；`view/row.rs` 的 `CandidateRow` 带 `label`，预测第一行是 `⇥`、其余为空（`view::candidate_view`），IBus lookup table 与 Fcitx5 都用它；
+  Fcitx5 的 `addon/src/candidate.cpp` 给数字标签补「. 」、`⇥` 只空一格。空闲空格同样不送，情形同 Windows（见 crates/glimmer-server）。没有设置界面，开关只在配置文件 `[general] english_prediction`。
+  已知限制：有些客户端收到上屏后马上 Reset，预测可能被立刻收掉，要真机逐个看（GTK3、GTK4、Qt、Firefox、Chromium、终端）；Fcitx5 的 C++ 薄壳这次只做了语法检查、没整包链接，发版前要跑一次 `apps/linux/scripts/package-docker.sh`（`todo.md`）。
 - 启动：`glimmer-ibus --ibus`（`--echo` 换回显后端）；日志写 stderr 与 `~/.local/share/glimmer/logs/glimmer-ibus.<日期>.log`，zbus 压到 warn。
 - 常数：组句中 `Poll` 间隔 60 ms；空闲时学习数据 60 s 落盘一次。
 - 打包：`scripts/package.sh`（Linux 上）/ `scripts/package-docker.sh`（macOS 上，`GLIMMER_DATA_DIR` 指向有产品数据的 `data/`）出 `target/deb/Glimmer-<版本>-<arch>.deb`；装机布局与版本号规则见 `docs/notes/release.md`。
@@ -337,7 +470,7 @@ IBus 引擎进程 `glimmer-ibus`（package `glimmer-linux`），设计见 `docs/
 - `assets/sample/`：手写样例词库与释义表，不是产品数据。
 - `assets/emoji/emoji-zh.tsv` / `emoji-en.tsv`：Unicode CLDR 中文 / 英文 annotations 转出的 emoji 表（Unicode License v3，可发布；中文词与英文词各配 emoji，两张表加载时合成一张），
   `cargo run --release -p glimmer-dict-convert -- --out-dir assets/emoji emoji --language zh data/cldr/annotations-zh.json data/cldr/annotationsDerived-zh.json`（en 同理）。
-- 英文词表词频：`uv run tools/corpus/english_frequency.py data/generated/english.tsv -o data/generated/english-frequency.tsv`，再 `... english <词表> --frequency <那个文件>`。
+- 英文词表词频：`tools/corpus/english_frequency.py` 读一列单词、写 `小写词\t词频`，两遍生成的完整命令见下面 `tools/dict-convert` 的 `english`。
 - `assets/wubi/`：三份五笔码表的上游原文与许可，一个版本一个子目录，各有 README 记来源 URL、提交 / 取回日期、SHA256 与规模：
   - `wubi86/`：rime-wubi 的 `wubi86.dict.yaml`（提交 `152a0d3`，2023-10-25，YAML 头 `version: "0.7"`）+ `LICENSE.LGPL-3.0` + `AUTHORS`，LGPL-3.0。
   - `wubi98/`：yanhuacuo/98wubi 的含词表 `wubi98_ci.dict.yaml` + `LICENSE.LGPL-3.0`，LGPL-3.0，≈ 11.3 万条（单字 3.6 万 + 词 7.6 万）。
@@ -352,11 +485,23 @@ IBus 引擎进程 `glimmer-ibus`（package `glimmer-linux`），设计见 `docs/
 英文音标不用模型：`uv run tools/corpus/ipa_en.py` 把 ipa-dict 的美音表 `data/ipa/en_US.txt`（CMUdict 风格）换写成课本写法 `data/ipa/en_US-textbook.txt`
 （规则全在脚本里，Rust 只查表不改写），再 `... ipa` 给已有的 `glossary-en.tsv` 原地补（或 `export --ipa <表>` 导出时写）；多词短语逐词查全命中才拼。
 
+## tools/corpus
+
+uv 脚本，语料预处理。中文那几份见上面 `glimmer-lm`；英文词频是 `english_frequency.py`（见 `tools/dict-convert` 的 `english`）。
+
+`english_corpus.py`：英文 n-gram 训练与 `--eval-english` 的语料。`uv run tools/corpus/english_corpus.py` 是 `fetch` + `split`；
+`fetch [--sources …]` 按写死的 revision 从 Hugging Face 流式读、原样缓存到 `data/corpus/en/raw/<来源>-<分片>.jsonl.gz`（已有就跳过，先写 `.tmp` 再改名）；
+`split` 不联网、不用随机数：清洗 → 去重（8 个词以上的行跨文档去重）→ 按文档 id 的 sha256 取模 100 分份（0 调参、1 测试、2 验收，其余训练），**按整篇文档、整段对话分，不按句**；
+`verify` 查四份之间有没有重复文档与重复长句。五个来源：FineWeb sample-10BT（写作）、SODA（聊天，两方都取）、WildChat-1M 与 oasst2（聊天，只取用户说的话）、Ubuntu IRC（技术），
+许可与署名见 `assets/lexicon/05_english/README.md`。输出：训练 `data/corpus/en/train/<来源>.txt`（一行一句或一条消息，约 4,560 万词），
+调参 / 测试 / 验收 `data/eval/english/{dev,test,final}/{chat,tech,writing}.txt`（每份每类截到约 2 万词），清单 `MANIFEST.tsv`（每个文件的文档数、行数、词数、sha256）与 `SOURCES.tsv`（revision、许可、取用量）。
+用法规矩：`english-ngram` 只读训练那份；扫常数只用调参集；测试集每步报一次数；验收集只在全部做完时跑一次。
+
 ## tools/dict-convert
 
 产品数据的生成工具，输出到 `data/generated/`（gitignore）。
 
-- `ai`：AI 与软件开发领域词库，从 `assets/lexicon/ai/{terms,names}.tsv` 和 `domains/*.tsv` 校验生成 `dicts/ai.tsv` / `ai.qj`、`ai-audit.tsv`、`ai-coverage.tsv`；8,279 源条目，主词库去重后 7,726 条（2026-10-19）。`--exclude` 只排除必选主词库，`--corpus` 同时给 `corpus.txt` 和 `development.txt`，人工权重与真实次数分列，英文按标识符边界计数。`alias` 支持 `C++/@cpp`，`mixed` 支持 `Git分支/@gitfenzhi`，构建拒绝同码不同词。Core 统一开关，英文补全个人选择优先、领域次之；配置 `domains` 仍用 `ai`。见 [设计](../design/ai-dictionary.md)。
+- `ai`：AI 与软件开发领域词库，从 `assets/lexicon/ai/{terms,names}.tsv` 和 `domains/*.tsv` 校验生成 `dicts/ai.tsv` / `ai.qj`、`ai-audit.tsv`、`ai-coverage.tsv`；8,279 源条目，主词库去重后 7,726 条（2026-10-19）。`--exclude` 只排除必选主词库，`--corpus` 同时给 `corpus.txt` 和 `development.txt`，人工权重与真实次数分列，英文按标识符边界计数。`alias` 支持 `C++/@cpp`，`mixed` 支持 `Git分支/@gitfenzhi`，构建拒绝同码不同词。Core 统一开关，英文模式里领域名称与个人词、随包词一起打分，领域名称加 `ScoreParams::domain_bonus`（ln 100 nat）；配置 `domains` 仍用 `ai`。见 [设计](../design/ai-dictionary.md)。
 
 - `lexicon`：从 `assets/lexicon/`（自建词库源：规范字 + 常用词 + THUOCL 领域词）加 Unihan 读音（`data/unihan/Unihan_Readings.txt`）、LLM 多音字标注（`gloss-gen pinyin`，
   结果 `data/generated/pinyin-llm.jsonl`，不进 git，**随数据包的 `glimmer-llm-intermediates.tar.gz` 发**，丢了就得从已发布的词库里反推，见 `internet-slang.md`）、
@@ -366,7 +511,40 @@ IBus 引擎进程 `glimmer-ibus`（package `glimmer-linux`），设计见 `docs/
   音节判定在 `syllable.rs`（`lexicon` 与 `supplement` 共用）：汉字只认合法拼音音节，**拉丁字母 / 数字自成一节**（`C盘` → `c pan`、`P0` → `p 0`），
   否则 Unihan 查不到读音、整条会被 `dropped`。给定读音以词表为准（`U盘` 读 `you pan`）；放行只对非汉字生效——`儿` 的 Unihan 读音里有儿化的 `r`，
   对汉字放行会顶掉 `er` 成主读音。`kMandarin` 取全部值而不是第一个：`嗯` 是 `ǹg en`，只取第一个这个字就一个合法音节都不剩。
-- `english`：转 `assets/lexicon/05_english/00_all_words.tsv`；`cedict`：释义表备用来源。
+- `english`：`assets/lexicon/05_english/00_all_words.tsv` → `english.tsv`（`词\t编码\t词频`），规则在 `english/words/mod.rs` 模块注释：
+  收 ASCII 字母、中间可夹单个撇号的写法，编码用 `english_code` 现算；同一个词只留一条，不同写法都留（`or` / `OR`、`well` / `we'll`），
+  同码先后：不带撇号的在前 → ESDB 常见度等级小的在前（没有等级的 CSpell 技术词在后）→ 全小写在前 → 读入先后。
+  给了 `--case-counts`（`english-case` 的输出）时，「只差大小写」的一组改按语料里原样写法的次数排（`words/case/`）：次数最多的当缺省写法，合计不到 `--case-min-total`（缺省 20）的组沿用上面的规则，组在同码里的位置不变；其余写法的词频 = 缺省 + 1000 × log10(次数比)，夹在 [缺省 − 3000, 缺省 − 300]。
+  展示写法 `--display-forms`（缺省 `07_display_forms.tsv`，15 条）是**替换**：那个写法放到同码第一，同码里与它只差大小写的写法删掉。
+  词频是 wordfreq Zipf × 1000：带撇号、wordfreq 不认识的词不收（几乎全是 `aardvark's` 这类所有格）；不带撇号、词频为 0 的给底值 `--frequency-floor`（缺省 3000，Zipf 3）；
+  与缺省写法只差大小写的（没给或没采信语料次数时）减 1000（Zipf 少 1），其他同码写法不超过缺省写法。展示写法在这些之后替换，优先级最高。
+  要跑两遍：第一遍没有词频表、全收，取第一列交给 `english_frequency.py` 算词频（输入要是一列单词：给三列的 `english.tsv` 它会把第二列的编码当键写出，撇号词就查不到了），再用 `english-case` 数大小写，第二遍带 `--frequency` 与 `--case-counts`：
+  ```sh
+  cargo run --release -p glimmer-dict-convert -- english assets/lexicon/05_english/00_all_words.tsv
+  cut -f1 data/generated/english.tsv > data/generated/english-words.txt
+  uv run tools/corpus/english_frequency.py data/generated/english-words.txt -o data/generated/english-frequency.tsv
+  cargo run --release -p glimmer-dict-convert -- english-case data/corpus/en/train/fineweb.txt
+  cargo run --release -p glimmer-dict-convert -- english assets/lexicon/05_english/00_all_words.tsv \
+    --frequency data/generated/english-frequency.tsv --case-counts data/generated/english-case.tsv
+  ```
+  2026-11-06：10.57 万条、9.98 万个编码，5,430 个编码对多个词，撇号词 9,637，给底值的 14,128。
+- `english-case`：规范书面语料（只给 `data/corpus/en/train/fineweb.txt`，聊天与 IRC 大量全小写定不了大小写）→ `english-case.tsv`（`写法\t次数`），数每个原样写法（区分大小写，撇号统一成 `'`）出现几次；句首的词、全大写行与标题行里的词、紧挨另一个大写词的大写词（多词专名 `South Africa` 的 South）不计，词与句子边界用 `english::tokenize`。只输出转小写后在 `--words`（缺省 `data/generated/english.tsv`）里的写法。给 `english --case-counts` 用。
+- `english-ngram`：英文语料（一行一句或一条消息，**只给训练那份** `data/corpus/en/train/*.txt`）→ `lm-en-unigram.tsv` / `lm-en-bigram.tsv` / `lm-en-trigram.tsv`（格式与中文 `bigram` 相同），
+  再 `pack lm` 打成 `lm-en.qj`。token 是 `english.tsv` 里的词转小写（保留撇号，`we'll` 与 `well` 是两个 token）；切词只用 Core 的 `english::tokenize`（与运行时同一份规则）：
+  词表外的词与 `Gap`（数字、URL、`foo_bar` 这类）都断开、不把两边接起来，`Gap` 之后不计句首；句末标点、换行、一行结尾是句末，下一个词从 `<s>` 起算。
+  计数、三元整批剪枝、阈值与上限复用 `bigram/counts.rs`。随包这份按次数截到二元 29 万、三元 35 万（一元 7.7 万词），9.8 MB：
+  ```sh
+  cargo run --release -p glimmer-dict-convert -- english-ngram data/corpus/en/train/*.txt --min-count 10 --max-bigrams 290000 --min-trigram-count 9 --max-trigrams 350000
+  cargo run --release -p glimmer-dict-convert -- pack lm \
+    --input data/generated/lm-en-unigram.tsv data/generated/lm-en-bigram.tsv data/generated/lm-en-trigram.tsv --output lm-en.qj \
+    --name "Glimmer English n-gram" --license "ODC-By-1.0 AND CC-BY-4.0 AND Apache-2.0" \
+    --attribution "FineWeb (Hugging Face, ODC-By 1.0); SODA (Allen Institute for AI, CC BY 4.0); WildChat-1M (Allen Institute for AI, ODC-By 1.0); Ubuntu IRC (Common Pile, public domain); OpenAssistant oasst2 (Apache-2.0)" \
+    --source https://huggingface.co/datasets/HuggingFaceFW/fineweb --data-version 2026-11-06
+  ```
+  另有一份二元 80 万 / 三元 120 万的 `lm-en-large.qj`（22.7 MB），调参集上前三省键率只多约 1 个点，不随包。
+- `english-misspellings`：typos 误拼对照 `06_misspellings.tsv`（`--input`）→ `english-misspellings.tsv`（无表头 `误拼\t正确词`），对着 `--words`（缺省 `data/generated/english.tsv`）滤掉
+  只差大小写的、正确词不在词表里的、误拼本身是词表里不带撇号的词或与正确词同码的；2026-11-06 源表 99,705 行留 99,658 行（47 行正确词不在词表）。词表重生成后要跟着重跑。
+- `cedict`：释义表备用来源。
 - `bigram`：统计语料的一元 / 二元 / 三元（同一遍分词），写 `lm-unigram.tsv` / `lm-bigram.tsv` / `lm-trigram.tsv`；
   三元的阈值与上限单列（`--min-trigram-count` 缺省 5、`--max-trigrams` 缺省 1000 万，一条在 `lm.qj` 里 8 字节），
   内存里三元表到 4000 万条就整批剪枝（扔掉不超过阈值的、阈值再加一，见 `bigram/counts.rs`），输出还砍掉上文本身不在二元表里的那些；

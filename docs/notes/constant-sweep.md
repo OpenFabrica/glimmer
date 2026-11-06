@@ -452,3 +452,57 @@ target/release/glimmer-cli --replay <日志副本> --misses 100000 --neural data
 target/release/glimmer-cli --eval-text <文档短句>.tsv --eval-chunk 2 --misses 5000 --neural data/model/model.qjm
 # 比别的门槛加 --tune whole=1.5；whole=0 等于改前的整句排法
 ```
+
+## 英文候选常数（2026-11-06 起）
+
+英文模式候选的打分常数（`english/score/` 的 `ScoreParams`，公式见 `crate-notes.md`「英文模式候选」）与英文语言模型的平滑参数都能 `--tune`，
+回放里英文只有一两百条，扫它们用英文打字模拟（`--eval-english`）而不是 `--replay`。
+
+### 可扫的常数
+
+| 名字 | 是什么 | 缺省 |
+|---|---|---|
+| `en-misspelling` / `en-near` / `en-edit` / `en-two` | 误拼表、便宜的一处错误（邻键 / 对调 / 双写多按少按）、其他一处错误、两处错误的敲错代价 | 0.05 / 0.01 / 0.003 / 0.0001 |
+| `en-literal` | 原样读法（敲的串没有任何补全时它本身进池）的代价 | 0.01 |
+| `en-typo-complete` | 纠错后还要再补字母的候选（变体只是它的前缀）代价再乘的折扣；变体正好是整词的不打折 | 0.1 |
+| `en-lambda-cap` / `en-lambda-half` / `en-k` | 个人份额混合权重 λ 的上限、λ 到 0.5 时的个人总次数、个人份额分母上的 K | 0.3 / 50 / 2 |
+| `en-domain` | 领域词库名称的加分（nat） | ln 100 ≈ 4.6 |
+| `en-zipf-floor` | 词频换算概率时的 Zipf 下限 | 3 |
+| `lm-en-mode` / `lm-en-d3` / `lm-en-d2` / `lm-en-trigram` | 英文语言模型的回退方式、三元 / 二元折扣、关掉三元那层（含义同中文的 `lm-`，两边互不干扰） | 2（接续概率）/ 3 / 3 / 开（`Smoothing::DEFAULT`，与中文同一份） |
+| `en-predict-min` | 下一词预测第一名的概率下限，低于它整个不出（`PredictParams::min_probability`） | 0.3 |
+| `en-predict-count` | 下一词预测最多给几个（界面只让 Tab 接受第一个；`predict` 组的「如果给三个」不靠它，自己临时调成 3） | 1 |
+
+`en-literal` 与 `en-typo-complete` 的缺省是在调参集上扫出来的：原样读法 0.1 / 0.03 / 0.01 / 0.003 / 0.001 / 0 × 折扣 1 / 0.3 / 0.1 / 0.03 共 24 组，取三类文本错字组首选都不低于基线、未登录词被换得最少的那组（0.01 × 0.1）。原样读法的模型概率按词频下限算、不看上文，取 0.1 时它常压过上文里概率更低的正确纠错；代价是词表里没有的词按空格被换掉的比 0.1 时多约三成（`score/params.rs` 的注释）。
+
+### 尺子与规矩
+
+- **只用调参集**（`data/eval/english/dev/`）扫，测试集与验收集不拿来挑常数（`plan/model-eval.md`「英文输入」）。三类文本（聊天 / 技术 / 写作）各扫一遍，不只看聊天。
+- 看「实际按键」口径的首选 / 前三省键率，同时盯着「正常词被改错」（词表里有的换成别的词要保持 0）与个人词回归，省键率升了但改错多了不算赢。
+- 同一个二进制、同一份文本、同一个种子才能比；`--eval-english-words` 限词数可以先粗扫再全量复核。
+
+### 怎么复现
+
+```bash
+cargo build --release -p glimmer-cli
+# 配置副本里把 [predict] enabled 改成 false；设置文件每行一组，空行 = 缺省
+printf '\nen-edit=0.001\nen-edit=0.01\nen-lambda-cap=0.2\nlm-en-d2=2\n' > /tmp/en-settings.txt
+GLIMMER_SWEEP_MODE=english GLIMMER_EVAL_ARGS='--eval-english-groups complete,typo,prefix,space,personal' \
+  tools/eval/sweep.sh data/eval/english/dev/chat.txt /tmp/config.eval.toml /tmp/en-settings.txt /tmp/en-sweep.tsv
+```
+
+英文模式下 `sweep.sh` 的第一个参数是一份英文文本，`GLIMMER_EVAL_ARGS` 原样追加给每次运行；输出每组设置一行：
+首选 / 前三省键率（文章口径、实际按键）、错字组前三与省键率、错前缀组省键率与没出现数、改错（词表内 / 词表外）、每键 p50 / p95（毫秒）、个人词回归过几条，百分数去掉了 `%`。
+跑了 `predict` 组时后面再接 10 列（没跑是 `-`）：`预测出现`（出现率）、`预测精确`（第一名命中 / 出现）、`预测命中占词位`、`含预测首选实际` / `含预测前三实际`（带预测那一步的省键率，实际按键）、
+`给三个前三`（「如果给三个」时前三有目标词占出现）、`连按1` / `连按2` / `连按3+`（连续命中段的段数）、`预测p95ms`（取预测耗时 p95）。
+
+### 下一词预测的阈值（2026-11-07）
+
+`en-predict-min` 在调参集三类文本上扫了 0.02 / 0.05 / 0.1 / 0.15 / 0.2 / 0.3 / 0.5 / 0.7 八档（`--eval-english-groups complete,predict`），取 0.3；表与理由在 `plan/model-eval.md`「下一词预测」。
+要点：猜错不扣键，含预测的省键率随阈值单调降，挑阈值不能看省键率，看「出现率 vs 精确率」。原始输出与汇总 `sweep.tsv` 在 `data/eval/english/predict-sweep/`（命令在同目录 `COMMAND`）。
+
+```bash
+for m in 0.1 0.3 0.5; do
+  target/release/glimmer-cli --config data/eval/english/baseline/config.toml --misses 0 \
+    --eval-english data/eval/english/dev/chat.txt --eval-english-groups complete,predict --tune en-predict-min=$m
+done
+```

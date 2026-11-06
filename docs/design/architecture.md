@@ -43,7 +43,7 @@ glimmer/
 │   ├── glimmer-learning/      # 用户词频、用户词、个人英文词、个人 n-gram、个人敲错表（user.tsv / user-words.tsv / user-english.tsv / user-ngram.tsv / user-typos.tsv）、输入日志（input-log.jsonl）、输入统计（usage.tsv）、词汇记录（user-vocab.tsv）
 │   ├── glimmer-predict/       # 云联想：Predictor 的网络实现（OpenAI 兼容接口）
 │   ├── glimmer-update/        # 应用内检查更新：拉 releases.json、比版本、下载安装包并校验；安装交给壳
-│   ├── glimmer-lm/            # 整句转换的 bigram 语言模型：LanguageModel 的实现
+│   ├── glimmer-lm/            # 整句转换的 n-gram 语言模型：LanguageModel 的实现；英文候选另装一个实例（lm-en.qj）
 │   ├── glimmer-neural/        # 字级 Transformer 的本地推理（candle）：SentenceScorer 的实现，给整句前几条路径重打分
 │   ├── glimmer-format/        # .qj 数据容器：mmap 打开、零拷贝视图、写入器、可落盘的哈希索引（dictionary / lm 依赖它）
 │   └── glimmer-platform/      # 平台层共用的部分：配置文件、协议类型
@@ -56,7 +56,7 @@ glimmer/
 │   └── linux/                  # 规划
 │
 ├── tools/
-│   ├── dict-convert/           # 产品数据生成：lexicon / bigram / mine / english / emoji / pack
+│   ├── dict-convert/           # 产品数据生成：lexicon / bigram / mine / english / english-ngram / english-misspellings / emoji / pack
 │   ├── gloss-gen/              # LLM 批量生成释义表与多音字标注
 │   └── corpus/                 # 语料预处理脚本（uv）
 │
@@ -75,7 +75,9 @@ glimmer-core
 ├── candidate       # 候选数据模型（Candidate / Translation / Sense / PartOfSpeech / Language）；layout 是分页排布（本地候选 + 云端固定槽位），各平台壳共用
 ├── ranking         # 候选排序
 ├── shortcut        # 快捷候选：日期 / 时间 / 星期、v 表达式模式（四则运算、中文数字），不查词库
-├── english         # 英文模式候选：词表精确词 / 前缀补全 / 一处编辑纠正（edit.rs），大小写跟着敲的走
+├── english         # 英文模式候选：切词（token，训练与运行时共用）、QWERTY 邻键、噪声信道敲错变体（channel）、误拼表查询、候选池（pool，四路各有名额）、
+│                   #   统一打分（score：语言模型 × 敲错代价 + 封顶的个人份额）、精确词规则与大小写、下一词预测（predict：词后空格出一个词，Tab 接受）；
+│                   #   上文状态 EnglishContext 在 engine/english_context，预测的出现条件与接受在 engine/next_word
 ├── sentence        # 离线整句转换：词图 + bigram Viterbi + 束搜索，LanguageModel trait（glimmer-lm 实现，缺省退化为一元），UserNgram 个人 n-gram（二元 + 三元），Context 上文（前两个词），
 │               #   SentenceScorer trait（glimmer-neural 实现）：convert_paths 出前 K 条路径，Engine（engine/rescoring）按 路径分 + λ·(神经分 − 静态分) 重排，异步时后台线程打分、壳停顿后取
 ├── emoji           # emoji 候选：EmojiTable（词 → emoji，Unicode CLDR 中文 annotations）
@@ -219,7 +221,8 @@ CSR 偏移与后继）原样落盘，打开时 mmap 整个文件、校验一遍�
 - 生成：`cargo run --release -p glimmer-dict-convert -- pack dict --name … --license … --source …` → `dict.qj`，
   `pack lm --name … --license …` → `lm.qj`（`bundle.sh` 在 TSV 比 `.qj` 新时自动重打）；三份五笔码表各由 `dict-convert wubi` 转出 `<版本>.tsv` 再 `pack dict --output <版本>.qj`（META 记各自的许可与署名，逐版本命令在 `assets/wubi/<版本>/README.md`）。`Dictionary::from_path` 按魔数自动选
   `.qj` / TSV 路径，`BigramModel::from_path`（`.qj`）与 `from_paths`（TSV）分开；输入法与 CLI 有 `.qj` 就用它。
-  释义表、emoji 表、英文词表还是 TSV（加载各 20 ms 以内，等有需要再进容器）。
+  释义表、emoji 表、英文词表还是 TSV（加载各 20 ms 以内，等有需要再进容器）。英文语言模型 `lm-en.qj` 与中文 `lm.qj` 同一种类（`dict-convert english-ngram` 统计、`pack lm --output lm-en.qj`），
+  英文误拼表 `english-misspellings.tsv` 是 TSV；两个都可选，没有时英文候选按词频排、少一档纠错。
 - 格式版本不兼容时 `FORMAT_VERSION` 加一，读旧版的代码按需保留；`Kind` 编号只增不改。
 
 ### 候选生成需要整句转换
@@ -319,12 +322,19 @@ CC-CEDICT 表（`dict-convert cedict`）保留为备用来源，覆盖面广但�
   （`prediction/fuzzy.rs`：字母与全拼的编辑距离，简拼不算错，容错数随长度增长，不到 4 个字母不容错）而不是逐音节精确匹配；
   通过的插到候选第二位起（本地首选不动、其余相对顺序不动），云朵标记，数字键选，上屏吃掉整段拼音；
   词库里没有的记成**用户词**（`user-words.tsv`，与主词库同格式），下次本地直接出且靠 weight 排前。
-- **个人英文词**（`Learner::learn_english` / `user_english`，`user-english.tsv`）：回车 / 英文模式直通原样上屏的、像英文词的字母串
-  （中文模式下要求切不成完整拼音）和选中的英文候选，组成一张小 `WordList`，与随包英文词表一起出英文候选、排在前面。见 candidate-ui.md。
   **整句补全**：以这个词开头的完整说法（`suoyiwoxiangq` → 所以我想去吃饭），画在 preedit 右侧，Tab 接受。
+- **个人英文词**（`Learner::learn_english` / `user_english`，`user-english.tsv`）：回车 / 英文模式直通原样上屏的、像英文词的字母串
+  （中文模式下要求切不成完整拼音）和选中的英文候选，组成一张小 `WordList`，与随包英文词表一起出英文候选。英文模式里它与随包词进同一个候选池打分，
+  个人份额按 `次数 − 1` 算、混合权重封顶 0.3（选过一次不起作用）；敲的原样正好是个人词时照精确词规则排第一。见 candidate-ui.md。
+- **英文上文**（`EnglishContext`，`engine/english_context/`）：英文候选的语言模型只看本机记下的前两个英文词，与中文的上屏链分开存（那条链还管转移学习与自动造词，空格一来就清）。
+  状态分「不知道 / 句首 / 有词」，「不知道」只用一元概率，不当句首算；壳报不了的事件（只用鼠标点到别处）靠停手 5 秒作废兜底。随会话交换、隐私边界清空。
+  不读应用前文：各平台读前文的时机不一样，旧快照可能晚到，要按会话与请求代次判新旧，留到以后单独做。
+- **英文下一词预测**（`english::predict`，2026-11-07）：同一个英文语言模型、同一份英文上文，词后敲了空格就按后继表给最可能的一个词，Tab 接受。
+  它是本地的、同步的（取一次 p95 约 0.2 ms），不走 `Predictor`、不联网，与下面「上屏之后不联想」不矛盾：那条说的是云端的无拼音续写。
+  出不出、出什么、接受后记什么全在 Core（`Engine::english_predictions` / `accept_english_prediction`），壳只管什么时候画、Tab 交不交给 Core。
 - 上下文只来自应用（IMK `attributedSubstringFromRange:`）；终端、微信这类给不出的就只靠拼音。
   **本地输入历史不当上下文**：它是跨应用拼起来的碎片，用它联想出来的全是噪音。
-  上屏之后不联想：没有拼音约束的下文联想每次上屏多发一次请求，纯靠猜，已删除。
+  上屏之后不联想：没有拼音约束的下文联想每次上屏多发一次请求，纯靠猜，已删除（英文模式词后的本地下一词预测是另一回事，见上）。
 - 联想不限语言：模型按光标附近文本的语言续写。
 - **问字模式**（`?` 开头）复用同一条通道：`PredictionRequest.kind = Question`，只带问题拼音（不带应用上下文、不要整句），
   `glimmer-predict` 按 kind 换系统提示，回复是 `answers`（字 / 短答案 + 带声调读音，放 `CloudWord.reading`）；
@@ -412,7 +422,7 @@ CC-CEDICT 表（`dict-convert cedict`）保留为备用来源，覆盖面广但�
   失焦 / 停用时 DLL 发 `Commit`，Server 回 `Committed { text }`（缓冲区原样交出，对应 macOS 的 `commitComposition`），
   DLL 用最近收键记下的 `ITfContext` 经编辑会话落进文档；应用强行终止组句（`OnCompositionTerminated`）时拼音已被框架定成普通文本，
   DLL 只记「Server 缓冲过期」，下次说话前先 `Commit` 并丢掉交出的文本，不再插一次。
-  中英模式：**Windows 与 macOS 机制不同**。macOS 用 Caps Lock 当中英切换键；Windows 按本地习惯，单击 Shift 在中 / 英间翻转。
+  中英模式：**Windows 与 macOS 机制不同**。macOS 缺省单击 Shift，Caps Lock 也翻转模式（实际模式是 Caps Lock 状态异或快捷键切换，`imk/mode.rs`）；Windows 按本地习惯，单击 Shift 在中 / 英间翻转，Caps Lock 只管大小写。
   单击 Shift 的判定在**击键 sink** 里（`com/key/shift.rs`，喂 `OnTestKeyDown` / `OnTestKeyUp`：按下 Shift 到抬起之间没有别的键插进来就是一次单击；
   微软 SampleIME 的 `OnTestKeyDown` 同样处理 VK_SHIFT，sink 收得到独立修饰键）。之前用线程级 `WH_KEYBOARD` 钩子判定，但钩子**看不到被 TSF 吃掉的键**
   （msctf 在队列层把它们改成 WM_NULL），Shift + 数字（删候选 / 第二译词）会被误判成单击而切换模式，2026-09-11 真机确认 sink 收得到 Shift 后钩子已删。

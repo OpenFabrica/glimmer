@@ -31,7 +31,7 @@
 | 用途 | 来源 | 许可 | 备注 |
 |---|---|---|---|
 | 拼音词库（产品） | 自建，源数据在 `assets/lexicon/`：《通用规范汉字表》8105 字（政府公布的规范字表，iDvel 转录并与 shengdoushi 分级表核对）、《现代汉语常用词表（草案）》56k 词（教育部 2008，liuxilu 校对版，自带拼音）、THUOCL 11 类领域词 15.7 万（2026-09-06 起按语料次数拆开：常见的留基础词库，其余各成一本随包 `.qj`；清华 NLP，MIT） | 字表转录自国务院公布的规范（国发〔2013〕23号）；常用词表转录自 2008 年出版的草案（课题组编，商务印书馆），不是正式规范；两个转录仓库都未附许可证；THUOCL MIT；读音 Unihan（Unicode License v3） | `dict-convert lexicon` 生成 `dict.tsv`（20.5 万条，随仓库放 `assets/lexicon/dict.tsv`）：字与领域词读音来自 Unihan，5.6 万含多音字的领域词和 1.2 万含多音字的常用词由 LLM 标注再逐字对照 Unihan 校验（常用词表自带拼音对多音字错了 288 处：部长 chang、西藏 cang、成都 dou……，以标注为主读音、原读音降权保留），词频来自下面两份语料的统计（两遍：先按底值分词统计，再用真实词频重统计）。2026-09-05 起取代雾凇拼音（已从数据目录与工具里移除，为什么不用见下面「许可策略」） |
-| 英文词表（产品） | 同一数据包 `05_english`：ESDB（en-wl/wordlist，MIT-like）、CSpell software-terms（MIT）、typos 误拼对照（MIT） | 均宽松，许可原文随包 | `dict-convert english` 取纯字母词 9.5 万，词频 wordfreq；误拼对照表以后可喂英文纠正。取代雾凇 en_dicts |
+| 英文词表（产品） | 同一数据包 `05_english`：ESDB（en-wl/wordlist，MIT-like）、CSpell software-terms（MIT）、typos 误拼对照（MIT） | 均宽松，许可原文随包 | `dict-convert english` 取 10.6 万条（含 `don't` 这类撇号词，2026-11-06），词频 wordfreq；typos 经 `dict-convert english-misspellings` 转成英文纠错的误拼表 `english-misspellings.tsv`（9.97 万对）。取代雾凇 en_dicts |
 | 语言模型语料 | 中文维基（HF `wikimedia/wikipedia` 20231101.zh） | CC BY-SA 4.0 | 百科体，第一人称、口语词几乎没有（去 / 累 这类词计数极低），单独用它整句会偏向地名术语；由它统计的 bigram 表按 CC BY-SA 对待 |
 | 语言模型语料 | LCCC（清华 `thu-coai/lccc`，微博对话） | MIT | 口语对话，补维基缺的日常用语；两份语料合并统计。`tools/corpus/parquet_to_text.py` 转文本，`dict-convert bigram` 统计 |
 | 语言模型 | Rime 八股文 / octagram | essay 只是词频表；octagram 是 LGPL | 未采用：essay 没有二元信息，octagram 文件格式是 Rime 私有的 |
@@ -41,6 +41,12 @@
 | 词汇等级（统计） | 已用：CEFR-J Wordlist 1.5（A1–B2，免费须署名）+ Octanove C1/C2（CC BY-SA 4.0）；JLPT N5–N1（Tanos CC BY，经 elzup MIT 整理）。四六级 / 商务英语词表在 GitHub 上只有大纲词汇的转录、许可不明，没用 | 已核 | 「统计」页按级数见过 / 看熟 / 上屏过的译词（`assets/levels/`）；也可做英→中 / 日→中方向的种子；不进候选窗口 |
 | emoji | Unicode CLDR 中文与英文 annotations（`cldr-json` 的 `annotations/{zh,en}`、`annotationsDerived/{zh,en}`） | Unicode License v3（宽松，需保留版权声明） | `dict-convert emoji --language zh\|en` → `assets/emoji/emoji-{zh,en}.tsv`，随仓库与发布包提供；许可文本在 `assets/emoji/LICENSE-unicode.txt`。日文表要等有日语输入模式 |
 | 英文词频 | wordfreq（Python 包） | 代码 MIT，数据 CC-BY-SA 等 | 只取每个词的 Zipf 频率数字给英文补全排序，`tools/corpus/english_frequency.py` 生成 `english-frequency.tsv`（gitignore） |
+| 英文语言模型语料 | [FineWeb](https://huggingface.co/datasets/HuggingFaceFW/fineweb)（Hugging Face，sample-10BT 的一部分，写作类） | ODC-By 1.0，须署名；同时受 Common Crawl 使用条款约束 | `tools/corpus/english_corpus.py` 按写死的 revision 下载、去重、按文档切成训练 / 调参 / 测试 / 验收四份（`data/`，gitignore）。原始语料与切出的文本不进仓库、不随包，随包的只有从训练那份统计出的 `lm-en.qj`（META 写全五个来源的署名）；评测集只在本机用 |
+| 英文语言模型语料 | [SODA](https://huggingface.co/datasets/allenai/soda)（Allen Institute for AI，Kim et al. 2023，合成的日常对话，聊天类） | CC BY 4.0，须署名 | 同上 |
+| 英文语言模型语料 | [WildChat-1M](https://huggingface.co/datasets/allenai/WildChat-1M)（Allen Institute for AI，Zhao et al. 2024，只取用户说的话，聊天类） | ODC-By 1.0，须署名 | 同上 |
+| 英文语言模型语料 | [Ubuntu IRC](https://huggingface.co/datasets/common-pile/ubuntu_irc_filtered)（irclogs.ubuntu.com，Common Pile 整理，技术类） | 公共领域，无署名要求，仍注明出处 | 同上 |
+| 英文语言模型语料 | [OpenAssistant oasst2](https://huggingface.co/datasets/OpenAssistant/oasst2)（OpenAssistant / LAION，只取用户说的话，聊天类） | Apache-2.0，保留版权与许可声明 | 同上 |
+| 英文语言模型（产品） | 上面五份语料的训练那份统计（`dict-convert english-ngram`，二元 29 万 / 三元 35 万，9.8 MB） | `ODC-By-1.0 AND CC-BY-4.0 AND Apache-2.0`（写在 `lm-en.qj` 的 META） | 英文候选按上文排序；与误拼表一起等 `data-v9` 发出后随包，没有它时英文候选按词频排 |
 | 五笔 86 码表（产品） | [rime/rime-wubi](https://github.com/rime/rime-wubi) `wubi86.dict.yaml`（极点五笔 6.0 血统，带词频），原文与许可在 `assets/wubi/wubi86/` | LGPL-3.0，随包附许可全文与 AUTHORS 署名；字根与编码规则（王永民）已进公有领域 | `dict-convert wubi` 按常用字集过滤后 `pack dict --output wubi86.qj`；13.7 万条 → 7.4 万条。选型见 `docs/plan/wubi.md` |
 | 五笔 98 码表（产品） | [yanhuacuo/98wubi](https://github.com/yanhuacuo/98wubi) `wubi98_ci.dict.yaml`（含词表：单字 3.6 万 + 词 7.6 万），原文与许可在 `assets/wubi/wubi98/` | LGPL-3.0，随包附许可全文与署名 | 同一个 `dict-convert wubi` + `pack dict --output wubi98.qj`；≈ 11.3 万条。2026-09-17 随 86 一起随包。同作者 `98wubi-tables` 的 `wubi98_U.dict.yaml`（Unlicense）是纯单字表、没有词组，不用 |
 | 五笔新世纪码表（产品） | [GuoBinyong/wubixinshiji](https://github.com/GuoBinyong/wubixinshiji) `wubixinshiji.dict.yaml`（上游是王永民《五笔字型大一统》的新世纪整合词库），原文与署名在 `assets/wubi/wubixsj/` | 仓库 `AUTHORS` 声明 LGPL，无独立 LICENSE；王码公司对新世纪版仍可能主张。2026-09-17 由用户决定许可不作门槛，如实署来源 | 同一个 `dict-convert wubi` + `pack dict --output wubixsj.qj`；≈ 11.2 万行 |
@@ -68,6 +74,8 @@
 - 数据文件不并入代码许可：每个数据源在 `assets/` 下带自己的 LICENSE 和署名文件，README 里列出。
   CC BY 只需署名；CC BY-SA 的 share-alike 只约束数据本身及其修改版，不传染到代码，
   但对 CC-CEDICT 做的任何加工（裁剪、合并 gloss）都要以 CC BY-SA 发布。
+- 训练语言模型用的语料（中文维基、LCCC、英文五份）只在本机 `data/` 里，不进仓库、不随包；分发的是从中统计出的计数模型，
+  按各语料的许可署名（ODC-By、CC BY 要求署名，Apache-2.0 保留声明），写在 `.qj` 的 META；`lm-en.qj` 随包之前，「关于」页与下面的随包数据清单还没有它，发 `data-v9` 时一起补。英文语料逐个的 revision 与取用量在 `data/eval/english/SOURCES.tsv`。
 - 每新增一个数据源或依赖，同步更新上表和 README 的 License 一节。
 - GPL 项目（水杉、部分 Rime 前端）的代码只能读不能搬。
 

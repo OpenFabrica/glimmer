@@ -15,7 +15,7 @@
   网络用语目录还空着（`assets/lexicon/04_internet_slang`）；LLM 标注的多音字读音抽查；挖词过滤已进 `dict-convert mine`（2026-09-07，`oov_filter.rs`，与原脚本输出逐行一致）；
   LM 表（TSV 48 MB / `lm.qj` 29 MB）不进 git，先按发布附件对待
 - [ ] ★ 首次运行体验：没有 `data/generated/` 时打进包里的样例词库只有几十条，等于不能用；随包数据（词库、LM 表、释义表、emoji）
-  要有一套发布版并定好体积（现在 `dict.qj` 3 MB + 领域词库 7 MB + `lm.qj` 29 MB + 释义表 `.qj` 39 MB + 英文词表 2 MB，pkg 34 MB；可再考虑变长编码）；
+  要有一套发布版并定好体积（现在 `dict.qj` 3 MB + 领域词库 7 MB + `lm.qj` 29 MB + 释义表 `.qj` 39 MB + 英文词表 2.5 MB，pkg 34 MB；`data-v9` 起再加英文语言模型 `lm-en.qj` 9.8 MB 与误拼表 2 MB；可再考虑变长编码）；
   发布物 = pkg（`bundle.sh --pkg`），要么 CI 生成数据、要么把 `data/generated/` 当发布附件
 - [ ] 仓库瘦身（2026-09-07 决定：主仓库继续单库、官网独立仓库，不拆代码；要处理的是数据）。
   已做：LLM 中间产物 `gloss-llm.jsonl`（30 MB）/ `gloss-en-llm.jsonl` / `pinyin-llm.jsonl` 移到 `data/generated/`（gitignore），仓库只留导出的 `glossary-*.tsv` 与词库源；
@@ -73,7 +73,28 @@
   偏好设置里看 / 清个人释义表、导入词库时批量预填
 - [ ] 候选窗口里超长释义要截断（CEDICT 表时 你 那条能拉到整屏宽；LLM 表已短，仍要兜底）
 - [ ] 翻译选中文字：译文很长时候选窗口的折行（读不到选区的提示已做）
-- [ ] 英文模式候选：把数据包的误拼对照表（typos，10 万对）喂进纠正，技术词（kubectl）没有 wordfreq 词频要给底值，两处编辑的纠正
+- [x] 英文模式候选：把数据包的误拼对照表（typos，10 万对）喂进纠正，技术词（kubectl）没有 wordfreq 词频要给底值，两处编辑的纠正（2026-11-06 完成，连同英文三元语言模型、噪声信道纠错、统一打分与 `--eval-english` 尺子一起做，见 `notes/crate-notes.md`「英文模式候选」）
+- [ ] ★ 发 `data-v9`：`lm-en.qj` 与 `english-misspellings.tsv` 已进 `tools/release/data-bundle.sh` 的清单，数据包还没发、`data.lock` 没动，所以 CI 打的包还不带它们（英文候选按词频排、没有误拼表那一档、不出下一词预测）；`data/generated/` 缺这两个文件时 `data-bundle.sh` 拒绝打包。`english-case.tsv`（重新生成 `english.tsv` 要用，没有它就得先下 FineWeb 重数一遍）还没进任何包，发版时一并定放不放进中间产物包。发完在空的数据目录里按 `data.lock` 重新下载、构建、跑一遍 `--eval-english`；「关于」页与 `design/landscape.md`「随包数据清单」补英文语言模型（五份语料的署名）与误拼表（typos，MIT）
+- [ ] Linux 包的 `apps/linux/packaging/copyright` 里 `english.tsv`（ESDB / SCOWL、CSpell software-terms）一直没有条目，是原有缺口，待补；`lm-en.qj` 与 `english-misspellings.tsv` 的条目已有
+- [x] 英文下一词预测（2026-11-07）：英文词上屏、敲了空格之后候选窗口显示最可能的下一个词，Tab 接受（上屏「词 + 空格」，可以连按），只接管 Tab；
+  `[general] english_prediction` 缺省开，没有 `lm-en.qj` 时不出。调参集聊天文本出现率 24.5%、精确率 55.2%，含预测首选省键率 13.6% → 19.5%；验收集聊天 25.6% / 57.1%，13.5% → 20.0%（`plan/model-eval.md`「下一词预测」）。下面几条是它留下的
+- [ ] 英文下一词预测的自动空格：Tab 接受的词自带一个空格，后面紧跟标点时要自己退格。调参集聊天文本里命中的预测约 14%（368 / 2678）后面紧跟标点；要做「接受后敲标点时吃掉前面那个空格」
+- [ ] Windows / Linux 的下一词预测少几种情形：没在组句时壳不把空格送给 Server，所以「词 逗号 空格」、回车原样上屏后再敲空格、数字选词后再敲空格都不出预测（macOS 都出），只在组句中空格选词上屏之后与 Tab 接受之后出。要支持就得每个空闲空格多一次进程间往返（或加一条只通知不吃键的消息，与下面「把组句外的功能键通知给 Core」一起做），这次没做
+- [ ] Windows：同一个输入框里用鼠标点到别处，TSF 收不到通知，下一词预测留到 5 秒过期，这期间按 Tab 会把词插到新光标处。彻底修要加 `ITfTextEditSink`
+- [ ] 下一词预测不能用鼠标点：三个平台点预测候选都不接受，只能按 Tab（候选窗都不收点击）
+- [ ] Linux 下一词预测真机逐个看：有些客户端收到上屏后马上 Reset，预测可能被立刻收掉（GTK3、GTK4、Qt、Firefox、Chromium、终端）
+- [ ] ★ Fcitx5 的 C++ 薄壳（这次为下一词预测改了 `addon/src/state.*` 与 `candidate.cpp`）只做了语法检查、没整包链接，发版前要跑一次 `apps/linux/scripts/package-docker.sh`
+- [ ] Windows 行内模式下同一输入框连续组句，第二段起拿不到光标前文：上屏后的编辑会话把 `Shared::context_reported` 置 true 并送光标前文，但 Server 在组句为空时丢掉它（`crates/glimmer-server/src/dispatch/rescore/mod.rs` 的 `set_surrounding` 开头组句为空就返回）。原有问题，与下一词预测无关
+- [ ] 英文下一词预测在句首：句末标点、回车之后不预测，因为句首词要配大写（模型 token 是小写），要先定大写规则
+- [ ] 英文行内灰字：预测现在显示在候选窗口里，没有画在插入点后面的灰字。按键规则要求「敲的字母本身是词就排第一」，这让首选省键率少约 17 个点；调参集聊天文本上去掉这条规则首选能到约 30%，但会改掉近千个正常词，所以组词中的补全也要换交互（灰字提示、单独的接受键）而不是放宽规则。改按键与界面，单独议
+- [ ] 连按 Tab 的整段通顺：每一步取的都是局部最可能的词，连起来不一定通顺；要做就在连按时按整段打分（小束搜索），或连按到第二步起抬阈值
+- [ ] 下一词预测的尺子量不出「打扰」：`--eval-english` 的 `predict` 组猜错不扣键，阈值只能按「出现率 vs 精确率」定；要量就攒真实日志（`english_prediction` 的接受率、弹出后接着敲的是不是那个词），或给猜错定一个代价
+- [ ] `LanguageModel::successors` 每条后继分配一个 `String`：常见前词（`the`）取一次预测约 0.23 ms 花在这里（`notes/performance.md`）；要更快得在 `glimmer-lm` 里加「按次数取前 K」，不分配全部后继
+- [ ] 英文小模型重排（Typeling-25M 那条路：文章里聊天文本首选省键率 43.1% 对 5 MB 三元模型的 31.6%，但内存 549 MB、每键 23–25 ms）：等三元模型的测试集数字定下来再决定；要做就用 `glimmer-neural` 的 candle 跑，n-gram 留作融合与过滤
+- [ ] 英文上文读应用里的前文（`SurroundingText`）：现在只用本机记下的上屏，点进输入框后的第一个词没有上文。各平台读前文的时机不一样（mac 只在组句第一键读，Server 收到的是异步快照），要改壳与协议，并按会话与请求代次判断快照新不新鲜，防旧快照晚到
+- [ ] 句中夹英文（`wozaidebugzhege`）：词图上加英文边；现在只认句末英文词（`EnglishTail`）
+- [ ] 云联想管英文：英文模式现在不发云联想
+- [ ] 英文长错串的两处编辑搜索：已优化一轮（每次 2.2–3 ms → 约 1–1.3 ms，只对 8–12 个字母试，试过没结果的串同一段组句里不再搜），剩下的是 8–12 个字母那几键：单次两处搜索约 1 ms，整次查询每键 1.5–2.3 ms（`internaxqonalizm`），还可再快
 - [ ] 全角 / 半角切换，`。` 与 `．`，`-` `=` 非组句时的行为
 - [ ] 快捷短语（`i` 前缀）：编码 → 短语表，用户可增删
 - [ ] 问字模式离线版：拆字表（IDS 数据）按部件查字，云端版已有
@@ -156,4 +177,5 @@
     密码框已按 TSF 规范做（2026-09-12）：`KEYBOARD_DISABLED` compartment 整键放行不组句，`IS_PRIVATE` / 密码 / PIN 输入范围为私密（组句但不学不记不发云端，`ClientMessage::Privacy` → `Engine::set_private`），box 真机验过：Edge 密码框整键放行；InPrivate 网页文本框报 `IS_SEARCH` 不报 `IS_PRIVATE`，私密路径只靠单测覆盖；CI 两个 job 都从 `data` Release 取 `model.qjm`（已做）。
 - [ ] Linux（Phase 5，IBus 版已做、未上真机）：GNOME / KDE 真机验；翻译选中文字（用 surrounding text 的选区）；面板上点第 10 个以后的候选；
   失焦时落进应用的是屏上 preedit（带音节分隔）而不是原文；全角 / 半角与设置界面；Fcitx5 插件真机验（KDE Plasma）
+- [ ] Windows / Linux 把组句外的功能键通知给 Core：TSF 的 `would_eat` 与 Linux 的 `key/filter.rs::should_forward` 不转发空闲时的退格、回车、方向键与组合键，Windows 也没有选区 / 鼠标的 sink，英文上文只能靠停手 5 秒作废（mac 都能收到，见 `notes/crate-notes.md`「哪些事件到得了 Core」；显示着下一词预测时例外，那时不送的键会发 `HideCandidates`、Server 作废上文）。要么加一条只通知不吃键的消息，要么在 `OnKeyDown` 里对放行的键补发；空闲回车还应当是句首
 - [ ] 配置同步、跨平台词库

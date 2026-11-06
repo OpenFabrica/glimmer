@@ -94,7 +94,7 @@ collection behavior 是 CanJoinAllSpaces + FullScreenAuxiliary + Stationary。�
 | 左 / 右、Cmd+左 / 右 | 移动拼音光标（不切模式）。光标停在中间时候选只按光标前的拼音算（`ni|hao` 出 你），上屏后剩余拼音留着、光标落到末尾；光标在开头或末尾按整段算 |
 | PageUp / PageDown、Shift+Tab、翻页键对（配置 `[general] page_keys`，缺省 `[` `]`，可选 `,` `.` 或 `-` `=`；选后者时组句中的 `-` 是翻页、不再进英文直输段） | 翻页。每页几个由 `page_size` 定（1–9） |
 | 半角标点（`is_ascii_punctuation`，翻页键除外；⇧+数字已被删候选 / 译词键截走） | 组句中敲它进入**英文直输段**：`no-way` `hello,` `dui'ma?` 整段原样显示，之后的可见字符（含数字、大写）都追加，回车原样上屏，空格原样上屏后空格本身也交给应用（`hello, world` 的空格要在），Esc 清掉。表达式 / 问字模式优先。中文模式下就能打带标点的英文句子；代价是没有了「拼音 + 标点 = 上屏候选 + 全角标点」，要先空格再打标点。这是缺省（`[general] punctuation_mode = "raw"`）；`commit` 先把高亮候选上屏再当普通标点处理，`auto` 由 `Engine::takes_punctuation` 看缓冲区切不切得成完整拼音（`hello` 直输、`nihao` 上屏；已在直输段继续追加；双拼 / 注音一律上屏）。进不进缓冲区两个壳都只问 Core，`-` 也走同一条路 |
-| Tab | 有整句补全（云联想）时接受它；没有则翻页 |
+| Tab | 有整句补全（云联想）时接受它；没有则翻页。英文模式不在组词、显示着下一词预测时接受预测（见「英文模式候选」的**下一词预测**） |
 | 修饰键 + 数字（⌥ / ⇧⌥ 上屏译词、⇧ 删候选） | **只在组句中认**。不在组句时 ⇧4 就是普通的 `$`，走中文标点规则出 ￥（⇧1 ！、⇧6 ……、⇧9 ⇧0 （ ））；曾经在这里被截走后原样还给应用，全角转换就漏了 |
 | 按住 Shift 打的大写字母 | 先把拼音原样上屏，再原样交给应用（临时打英文） |
 | ⌥ + 1–9 / ⇧⌥ + 1–9 | 上屏当前页第 N 个候选的**译词**而不是候选本身：⌥ 第一条，⇧⌥ 第二条（候选右侧有两个译词时）；日文不带注音；学习与拼音消耗同选了那个候选。没那条译词的候选吞掉按键不动。两组修饰键在配置 `[shortcut] translation` / `translation_second`（任意修饰键组合，偏好设置「快捷键」页点按钮录制），两组相同或为空整个退回缺省；说明里提醒避开 ⌃+数字（系统切桌面）和 ⌘+数字（应用切标签页）。控制器在 `handleEvent:client:` 里按键码认数字（修饰键会把数字变成 ¡™£），其余按键自己分发成 `handle_text` / `handle_command`。不能改用第二层协议 `inputText:key:modifiers:client:`：那会把回车、方向键当文本送来 |
@@ -115,7 +115,7 @@ collection behavior 是 CanJoinAllSpaces + FullScreenAuxiliary + Stationary。�
 
 **句末英文词**（`Engine::split_english_tail`，`query::EnglishTail`）：整段末尾是英文词表里的词、前面能切成完整拼音时，
 整句是头段的转换加上那个词（`woxiangxuehaorust` → 我想学好rust），排第一，`Query.tail` 是尾段字母（拼音行 `wo'xiang'xue'hao'rust`），
-词级候选只按头段查。整段字母根本切不成拼音的（`wodetv` 的 v、`woyongvim`）直接按英文读；整段也能读成拼音的
+词级候选只按头段查。整段字母根本切不成拼音的（`shezhivpn` 的 v、`woyongvim`）直接按英文读；整段也能读成拼音的
 （`woxiangxuehaorust` 读成 … ru s… t… 简拼、`wodedatabase`）两种读法比分：头段整句分 + 英文词 log 概率（wordfreq Zipf 换算，
 没词频按 Zipf 3）− 切换代价（`ENGLISH_SWITCH_PENALTY` 3 nat，拍的）要高过整段按拼音读的整句（`sentence::convert_whole`，
 末尾单字母也读，`huoz` → 或者，两边覆盖同样多的字母才公平），赢了英文读法排第一、拼音读法第二，输了英文读法不出
@@ -133,16 +133,56 @@ collection behavior 是 CanJoinAllSpaces + FullScreenAuxiliary + Stationary。�
 
 ### 英文模式候选
 
-Caps Lock 亮着（英文模式）敲字母时也组词：字母（以及组词中的数字、`_` `'` `-`）进缓冲区、原样显示，候选来自英文词表
-（Core `english::suggest`）：整段正好是的词第一（按词表写法），然后是前缀补全，4 个字母起再给差一处编辑（换 / 多 / 少一个字母、相邻对调）的纠正
-（`recieve` → receive，`seperate` → separate）；后两组各按选过的次数、词频排。大小写跟着敲的走：`Compa` 出 Company，`COMPA` 出 COMPANY。
+英文模式（单击 Shift 切换，mac 也可用 Caps Lock）敲字母时也组词：字母（以及组词中的数字、`_` `'` `-`）进缓冲区、原样显示，候选来自英文词表
+（Core `english::suggest`，实现与常数见 `notes/crate-notes.md`「英文模式候选」）。补全、纠错、个人词、领域词放进同一个候选池，用一个分数排：
+英文语言模型看前两个英文词给的概率 × 敲错代价，在池内归一化，再与个人份额按 λ 混合（λ 封顶 0.3）。所以同一个前缀，前一个词不同候选就不同。
+纠错从 4 个字母起：已敲的串按一处错误（邻键、对调、多敲、漏敲）变形后当前缀查，词没敲完也能纠（`tomm` → tomorrow），
+误拼表（typos，约 10 万对）命中的最便宜（`recieve` → receive，`seperate` → separate）；8–12 个字母、一处错误找不到时才试两处，更长的串一处纠不回就不再纠。
+排完再套精确词规则：敲的字母原样正好是词表里的一个写法，它排第一（打 `or` 第一个是 or 不是 OR，打 `well` 第一个是 well，`we'll` 在后），
+所以按空格不会把正常敲完的词换掉；敲的原样不是这组大小写写法里最常见的那个（缺省写法，按 FineWeb 里的实际次数定）时，缺省写法紧跟着排第二（`id` → id、ID，`api` → api、API，`google` → google、Google，按 2 就选到），单字母不提前（f 后面不跟 F），敲的就是缺省写法时也不提前（`or` 后面不跟 OR）。不是的话编码相同的词排最前（`dont` → don't，`im` → I'm）。大小写跟着敲的走：`Compa` 出 Company，`COMPA` 出 COMPANY。
 带数字或符号的（`foo1`）是标识符，不猜。emoji 照配，但排在所有词后面（上下键选词时不挡路）。
+没装英文语言模型（`lm-en.qj`）时概率退成词频，纠错与个人词封顶照旧。上文只来自本机记下的上屏（`EnglishContext`），句末标点与回车之后算句首，
+动过光标、切过应用、停手 5 秒以上就当不知道上文，只用词频与一元概率；不读应用里的前文。
 
 选词与中文模式一样：**空格选高亮、数字选当前页第 N 个、翻页键翻页**，上下键动高亮，Tab 也选高亮项；词上屏后空格照样交给应用，后面接着打下一个词。
-有候选时数字才选词，没候选（`kubectl` 这类词表没有的词）时数字是标识符的一部分。**回车、标点原样上屏敲的字母**（再把那个键交给应用），
+有候选时数字才选词，没候选（`openfabrica` 这类词表没有的词）时数字是标识符的一部分。**回车、标点原样上屏敲的字母**（再把那个键交给应用），
 词表没有的写法靠回车。0.1.3 之前空格只在动过高亮之后才选词、数字一律是数字，理由是不让词表没有的词被补全替换，
-但测试者按直觉都拿空格和数字选词，2026-09-16 改成与中文一致。Esc 清掉，退格删字母。英文模式不发云联想；回车原样上屏也不记「不纠这个串」。
+但测试者按直觉都拿空格和数字选词，2026-09-16 改成与中文一致。Esc 清掉，退格删字母。英文模式不发云联想（词后的下一词预测是本地语言模型给的，不发请求，见下）；回车原样上屏也不记「不纠这个串」。
 组词中 Caps Lock 灭了先把字母原样上屏。配置 `[general] english_candidates = false` 关掉候选，回到纯直通；偏好设置里有勾选框。
+
+**下一词预测**（Core `english::predict`，入口 `Engine::english_predictions` / `accept_english_prediction`，2026-11-07）：英文词上屏、紧接着直通了空格、还没开始敲下一个词时，
+候选窗口只显示一个词——英文语言模型按前两个英文词给的最可能的下一个词。没有组句、没有拼音行，与「翻译选中文字」一样借用候选窗口；应用里不放 marked text。
+
+- **只接管 Tab**：不带修饰键的 Tab 接受，上屏「词 + 空格」（空格由 Core 一并记成直通），上文前移一个词、又处在「刚敲过空格」，马上出再下一个，可以连按。
+  ⇧Tab / ⌃Tab 不接受。其他键先收起预测、再走没有预测时的路：字母开始组词，空格、标点、数字照常交给应用。
+  数字键不选预测（`have 2 cats` 的 `2` 不能被吃掉），所以预测那一行的序号画成 `⇥` 而不是 `1`，三个平台一样（macOS `host/presenting::label_next_word_rows`；
+  Windows / Linux 按 `glimmer-server` 的 `is_next_word_frame` 认预测帧、`next_word_label` 出序号）。
+  预测显示着时再敲空格：空格照常进应用，预测收起，不马上再弹。
+- **什么时候出**（全在 Core 判；壳只另加「用户看得见」与私密的保险）：英文模式（壳只在英文候选开着、这个应用没被 `[apps] english_candidates_off` 列进去时打开它）、`[general] english_prediction` 开着（缺省开）、
+  不在私密输入里（`Engine::set_private`）、组句为空、装了 `lm-en.qj` 与英文词表、英文上文记着词（不是不知道、不是句首）、最近一次事件是直通空格（`EnglishContext::after_space`）、上文没过 5 秒时效，
+  且第一名概率不低于 `PredictParams::min_probability`（缺省 0.3，怎么定的见 `plan/model-eval.md`「下一词预测」）。「词 逗号 空格」在 Core 里也出：逗号不改上文、空格又置上 `after_space`（Windows / Linux 见下面的平台差异）。
+  上屏的词不在随包词表里（个人词、未登录词）时上文作废，不出。
+- **私密输入框不出**，Tab 照常交给应用；与「私密里不学习、不发云端」是同一条线。私密里英文候选照常给（原有行为），只是不学习、不预测。
+  - 规则在 Core：`set_private` 为真时 `english_next_words` 为空；值真的变了（进或出）时英文上文作废（`engine/privacy.rs`），密码框里敲的词不当出来之后的上文，进去之前的词也不带进去。
+  - 什么算私密：Windows 是输入范围 `IS_PASSWORD` / `IS_PRIVATE` / PIN 类；Linux 是 purpose 为 PASSWORD / PIN 或带 `HINT_PRIVATE`；
+    Windows 上设了 `KEYBOARD_DISABLED` / `EMPTYCONTEXT` 的上下文（Chromium 系真正的密码框）键根本不送 Server。**Chromium 无痕窗口里所有输入框都报私密**，所以 Windows / Linux 的无痕窗口里也不出预测。
+    macOS 壳不调 `set_private`，自己看 Secure Input（`host/next_word::next_word_available`）。
+  - Server 另有一层同样的判断：`refresh_english_prediction` / `expire_english_prediction` 看 `Engine::is_private`，`dispatch/session/mod.rs` 的 `set_privacy` 在私密报告比空格晚到时把已显示的预测收起。
+- 接受的词与选中英文候选一样记个人词频、进英文上文；输入日志 `source` 记 `english_prediction`（`keys` 为空），回放跳过不评。
+- 预测不发云联想、不联网；云联想关着照样有。
+- 已知不足（`plan/todo.md`）：
+  - Tab 带出的空格后面紧跟标点时要自己退格（没有自动空格）；句首不出；没有行内灰字；连按 Tab 每步都是局部最可能的词。
+  - 三个平台鼠标点预测候选都不接受，只能按 Tab（候选窗本来就不收点击；macOS 鼠标按下直接收起预测）。
+  - Windows：同一个输入框里用鼠标点到别处，TSF 收不到通知，预测留到 5 秒过期，这期间按 Tab 会把词插到新光标处；彻底修要加 `ITfTextEditSink`。
+  - Windows / Linux：「词 逗号 空格」、回车或数字上屏后再敲空格都不出（见下）。
+  - Linux：有些客户端收到上屏后马上 Reset，预测可能被立刻收掉，要真机逐个看（GTK3、GTK4、Qt、Firefox、Chromium、终端）。
+- 平台差异：
+  - **Tab 只接用户看见了的预测**。macOS 直通空格要等 `handleEvent` 返回才进应用，所以预测晚一拍（50 ms 定时器，`host/next_word/`）再到插入点去画，这之前的 Tab 照常交给应用；
+    Windows 候选窗由 Server 画、位置要等插入点报上来，窗口真画出来之前的 Tab 也交给应用（`Router::english_prediction_visible`）。Linux 没有这个窗口期（IBus 串行、Fcitx5 同线程）。
+  - Windows / Linux 由 Server（`glimmer-server` 的 `dispatch/next_word.rs`）出预测帧（没有 preedit、候选全是英文词），DLL / 前端只在显示着时多送一个不带修饰键的 Tab。
+  - **Windows / Linux 空闲时的空格不送 Server**（TSF `would_eat` 与 Linux `key/filter.rs::should_forward` 没在组句时只送标点和数字），Core 看不到它，`after_space` 置不上。
+    所以那边只在「组句中空格选词上屏」（空格一并经 Core 直通）与「Tab 接受之后」出预测；「词 逗号 空格」、数字键或回车上屏之后再敲空格都不出。macOS 这几种都出。
+    要支持就得每个空闲空格多一次进程间往返，这次没做。
 
 **按应用关**：终端与代码编辑器里英文候选窗口会挡住应用自己的补全，vim / nano 里 Tab 和方向键又另有含义，所以 `[apps] english_candidates_off`
 列出的应用（按 IMK 客户端的 `bundleIdentifier` 认，`*` 结尾按前缀匹配）里英文模式是纯直通。缺省名单是 Terminal / iTerm / Warp / Ghostty /
@@ -150,11 +190,12 @@ Alacritty / kitty / VS Code / Cursor / Zed / JetBrains 全家 / MacVim / Sublime
 去掉写空表，改过名单的勾一下就回缺省。全局开关关着时这一项不起作用。开着详细日志时切到应用会把它的 bundle identifier 记进日志，往名单里加就照抄。
 `[apps]` 分节以后按应用定 preedit 模式等也放这里。
 
-**个人英文词表**（`user-english.tsv`，`词\t次数`）：随包词表只有两万多词，`gist`、`kubectl` 这类不在里面的词以前永远出不了候选。
-现在原样上屏的字母串只要像英文词——纯字母、至少两个，中文模式下还要**切不成完整拼音**（`hao` 回车多半要的是字母本身，不学；
-`gist` / `python` / `hello` 切不干净才是英文）——就记进个人词表，选中英文候选也记。英文候选由个人表 + 随包表一起出，
-个人表在前：精确词取第一个有的，补全与纠正合在一起按选过的次数、词频排（`Engine::english_lists`、`english::suggest` 收词表列表）。
-所以 `gist` 回车一次，下次敲 `gist` 它就是首选。
+**个人英文词表**（`user-english.tsv`，`词\t次数`）：随包词表 10.6 万条（含 `kubectl`、`gist` 这类 CSpell 技术词与 `don't` 这类撇号词），项目名、人名这类不在里面的词（`openfabrica`）靠个人表。
+原样上屏的字母串只要像英文词——纯字母、至少两个，中文模式下还要**切不成完整拼音**（`hao` 回车多半要的是字母本身，不学；
+`gist` / `python` / `hello` 切不干净才是英文）——就记进个人词表，选中英文候选也记。英文模式里个人词与随包词进同一个候选池：
+敲的原样正好是个人表里的写法时照精确词规则排第一，所以 `openfabrica` 回车一次，下次敲完 `openfabrica` 它就是首选；
+作为补全（敲 `gi`）时个人加分按 `次数 − 1` 算，只选过一次的词没有加分，要用过两次以上才往前挪，误选一次的 helloWorld 压不过 hello。
+中文模式的英文词与补全不走这套打分，仍是个人表 → 领域词 → 随包表依次取、表内按词频（个人表是次数）（`Engine::english_lists`、`extras::insert_english`）。整段正好是的那个英文词用词表的缺省写法（同码第一个）：中文模式打不出大写，敲小写不代表要小写，所以 `api` 出 API、`google` 出 Google、`id` 出 ID，`may`、`or` 的缺省写法本来就是小写；句末英文词与表达式模式（`very`）同样，句末两个字母的尾段算不算缩写也按缺省写法看。
 
 ### 英文补全与 emoji
 
@@ -241,13 +282,13 @@ Core `shortcut` 模块，不查词库、由输入直接算出，`CandidateKind::
 ### 问字模式（云联想的一部分，问字键 `u` 或 `?` 开头）
 
 缓冲区为空时敲问字键（缺省 `u`）或 `?` 进问字模式，接着用拼音敲问题：`usangemushishenmezi`（三个木是什么字）、`umumumu`（报部件）、
-`ufaguoshoudu`（短事实问答）。`?` 在任何配置下都是别名，也是英文模式（Caps Lock）下唯一的入口（`u` 在英文模式里就是字母 u）。
+`ufaguoshoudu`（短事实问答）。`?` 在任何配置下都是别名，也是英文模式下唯一的入口（`u` 在英文模式里就是字母 u）。
 本地不出候选，preedit 显示 `usan'ge'mu…`，停键后云端答字或短答案，
 带云朵与带声调读音（森 sēn），数字键选中上屏、吃掉整段。答案不做拼音校验（它本来就对不上问题的拼音）。
 请求里除了字母与切分还带 `question`：本地整句转换把问题拼音转成的汉字（`PredictionRequest::guess`，可能错字），模型据此理解问题；
 提示词强调用户是打不出这个字才来问的，**只答被问的字、不复述问题**。模型仍把问题整句写回来时（`?sangezhishishenmezi` 曾答 三个直是什么字），
 Core 按 `prediction::restates_question` 剔掉：与本地转出的问题相同、包含它的后半截、问题不短而答案一样长、或答案里带疑问词。
-中英文模式（Caps Lock）都能进：`?` 后面紧跟的不是字母（回车、空格、标点、方向键）就还原成问号上屏
+中英文模式都能进：`?` 后面紧跟的不是字母（回车、空格、标点、方向键）就还原成问号上屏
 （中文模式全角 `？`、英文模式半角 `?`）。回车和空格只做「把这个问号上屏」、键本身吞掉（否则聊天框里回车会连消息一起发出去、
 空格会多一个空格），标点和方向键还原后再交给应用；退格 / Esc 清掉。英文模式下 Caps Lock 送来的大写字母按小写收进问题。
 没开云联想时 `?` 仍然进问字模式但等不到答案，回车上屏原文；离线拆字版（IDS 数据）待做。
@@ -255,7 +296,7 @@ Core 按 `prediction::restates_question` 剔掉：与本地转出的问题相同
 替换整段拼音，Tab 接受，继续敲键就换掉。有应用上下文时整句接着上下文写；没有也给最常见的说法。
 接受的整句没有拼音，记不了词频与用户词，但会按语言模型切成词（Core `sentence::segment_text`：文本子串上的 Viterbi，模型认识的子串才算词，
 标点处断句）逐条记进个人 n-gram，与选整句候选一样；整句退格删光、同一段拼音重选时这些转移一并退回。没接语言模型时不记。
-上屏之后不联想。
+上屏之后不联想（英文模式词后的下一词预测是本地语言模型给的，不是联想，见「英文模式候选」）。
 
 答案怎么进候选：问字没有本地候选，`CandidateLayout::capacity` 把整页都给云端；壳补云端词前的「别挪走用户正看着的候选」保护
 （不在第一页、或高亮落在末尾云端格上就不补）对没有本地候选的情况必须放行，否则 `page_size - capacity = 0` 会把所有答案丢掉
@@ -313,7 +354,7 @@ Core 按 `prediction::restates_question` 剔掉：与本地转出的问题相同
 
 | 系统 | 切中英 | 英文模式 |
 |---|---|---|
-| macOS | Caps Lock 位置的中/英键。系统层面它切的是 Caps Lock 状态，我们把「Caps Lock 亮着」当作英文模式 | 默认小写，按住 Shift 大写；标点不转全角。macOS 上 Caps Lock 亮着时按不按 Shift 送来的都是大写，所以按键时读一次 Shift 的硬件状态（`NSEvent.modifierFlags`）决定大小写 |
+| macOS | 缺省单击 Shift（`[shortcut] mode_switch`，可改成修饰键加字母）；Caps Lock（中/英键）也翻转模式：实际模式是「Caps Lock 状态 异或 快捷键切过几次」（`imk/mode.rs`），所以 Caps Lock 灯不单独代表模式，以菜单栏「中 / 英」为准 | 默认小写，按住 Shift 大写；标点不转全角。Caps Lock 亮着时按不按 Shift 送来的都是大写，所以按键时看事件里的 Shift 决定大小写；Caps Lock 亮着、又用快捷键切回中文时，去掉 Caps Lock 造成的大写 |
 | Windows（Phase 5） | Shift 单击切中英；Caps Lock 是真正的大小写锁定 | 默认小写，按住 Shift 大写 |
 
 macOS 上如果系统开了「使用大写锁定键切换 ABC 输入法」，按键会直接切到 ABC 输入源，我们收到 deactivate、
@@ -368,7 +409,7 @@ Viterbi 按噪声信道挑路径：`meiganxi` 读成 没关系 只扣一次 5.5�
 Core `correction` 模块只产生候选纠正，挑选与学习在 Engine 里。
 
 **输入日志**（`[general] input_log`，缺省开）：每次上屏往数据目录的 `input-log.jsonl` 追加一行——`keys`（消耗掉的原始键）、`pinyin`（整段切分，纠错时是纠正后的）、
-`corrected`、`text`、`source`（word / cloud / sentence / english / shortcut / emoji / raw / translation / cloud_sentence）、`index`（选的是查询时候选列表里第几个，
+`corrected`、`text`、`source`（word / cloud / sentence / english / shortcut / emoji / raw / translation / cloud_sentence / custom / english_prediction，`custom` 是自定义短语，最后一个是 Tab 接受的英文下一词预测，`keys` 为空）、`index`（选的是查询时候选列表里第几个，
 晚到的云端词与原样上屏为空）、`top`（查询时前 5 个候选）、`scheme`、`english`、`t`（本机时间）；退格撤销另记一行 `retract`，指回被撤销那条的 `id`。
 只有敲的键与上屏的文字，不含应用里的上下文；只写本机，「高级」页可关可清，「关于」页隐私说明有写。用途：离线回放算首选命中率做排序 / 整句的回归评测，
 以及个人模型（Phase 7）的训练对。回放工具是 CLI `--replay`（见 CLAUDE.md），首批 150 条：词首选 75%、前五 95%，整句首选 86%。Core `Engine` 在 `query` 时留摘要（`QuerySnapshot`）、上屏时凑成 `InputLogEntry` 交给 `InputLogger`（学习 crate 的 `InputLog` 落盘，攒 20 条刷一次，停用输入法时也刷）。

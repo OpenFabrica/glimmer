@@ -29,14 +29,15 @@ description: 日期时间、算式与中文数字、按码点输入字符、中�
 - 整段输入为英文词时直接给出英文候选。拼音不成立时（`hello` 只能切成 `he l l o`）英文排第一，拼音成立时（`china`）英文排第二。
   勾选「偏好设置 → 通用」的「输入拼音时中文候选排在英文词前面」后英文固定排第二（`hello` 先 荷兰咯 再 hello，`key` 先 可以 再 key），
   `Space` 上屏的仍是中文，按 `2` 选英文；没有中文候选时（`github`）英文仍排第一。
+  英文词按最常见的写法给出，不看所敲字母的大小写：`api` 给出 API，`google` 给出 Google，`may` 给出 may。
 - 拼音不成立且不少于 3 个字母时补全前缀：`compa` → company / companies / compared。
-- 一句拼音末尾接一个英文词时，整句直接包含该词：`woxiangxuehaorust` → 我想学好rust，`wodeid` → 我的ID，`woyongvim` → 我用vim。
+- 一句拼音末尾接一个英文词时，整句直接包含该词：`woxiangxuehaorust` → 我想学好rust，`dakaipdf` → 打开PDF，`woyongvim` → 我用vim。
   拼音行显示 `wo'xiang'xue'hao'rust`，`Space` 上屏整句。该英文词需在词表中（用户自己输入过的也算，见 [英文模式](english-mode.md)）。
   `database` 这类同时可读作拼音的输入，按两种读法的通顺程度排序：我的database 排第一、我的大塔巴瑟 排第二；
   `womenqubeijing` 只给出 我们去北京。`fan`、`to` 这类短词按拼音处理；可纠正为通顺拼音的输入错误（`shiide` → 是的）不视为英文。
   英文词只识别句末，`wozaidebugzhege` 这类位于句中的暂不支持。
 - 不想在中文模式里看到英文词与补全，取消「设置 → 通用」的「输入拼音时也给英文词候选」（配置 `[general] mixed_english_candidates = false`）。
-  句末英文词并入整句不受它影响；英文模式（Caps Lock）的候选另由「英文模式也给候选」控制。
+  句末英文词并入整句不受它影响；英文模式的候选另由「英文模式也给候选」控制。
 - 输入拼音时输入半角标点（`-` `,` `.` `?` 等，翻页键除外）即进入**英文直输**：`no-way` `hello,` 整段原样显示，之后的字符原样追加，
   `Space` / `Enter` 原样上屏（空格字符也一并输出），因此中文模式下可直接输入 `hello, world?`。
   这是缺省行为；「设置 → 通用 → 打拼音时敲标点」可改为**先上屏候选再出标点**（`nihao,` → 你好，），

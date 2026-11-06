@@ -96,7 +96,7 @@ dev 版再接 `+g<短哈希>`，有改动加 `.dirty`：`0.1.0~linux.1~dev+g1a2b
 | 路径 | 内容 |
 |---|---|
 | `/usr/lib/glimmer/glimmer-ibus` | 引擎进程，IBus 按组件描述以 `--ibus` 拉起 |
-| `/usr/lib/glimmer/data/generated/` | `dict.qj`、`lm.qj`、`glossary-{en,ja,zh}.qj`、`english.tsv`、`dicts/*.qj`、可选 `wubi86.qj` / `wubi98.qj` / `wubixsj.qj`（有几份带几份） |
+| `/usr/lib/glimmer/data/generated/` | `dict.qj`、`lm.qj`、`glossary-{en,ja,zh}.qj`、`english.tsv`、`dicts/*.qj`、可选 `wubi86.qj` / `wubi98.qj` / `wubixsj.qj`（有几份带几份）、可选 `lm-en.qj` / `english-misspellings.tsv`（英文语言模型与误拼表，没有就不带） |
 | `/usr/lib/glimmer/data/model/model.qjm` | 本地整句模型，可选 |
 | `/usr/lib/glimmer/assets/` | `emoji/emoji-{zh,en}.tsv`、`levels/levels-{en,ja}.tsv`、`sample/dict.tsv`、`wubi/wubi86/{LICENSE.LGPL-3.0,AUTHORS}`、`wubi/wubi98/LICENSE.LGPL-3.0`、`wubi/wubixsj/AUTHORS`（各自的码表带上时） |
 | `/usr/share/ibus/component/glimmer.xml` | IBus 组件（`app.glimmer.IBus`，引擎名 `glimmer`），模板 `apps/linux/packaging/glimmer.xml.in` |
@@ -159,13 +159,15 @@ cargo 命令全 `--locked`（含 `bundle.sh` 与 `build.ps1`）。普通 CI 只�
 （预发布不会成为 GitHub 的 latest，官网取 latest 时不会拿到它）。仓库里 `tools/release/data.lock` 钉住当前要用的标签与两个资产的 SHA-256，
 跟用到新数据的代码同一个提交进去：checkout 哪个提交就拿到它对应的那版数据，离线自编译的人不会因为我们改了数据而编出坏包。
 
-- `tools/release/data-bundle.sh`：把 `data/generated/` 打成 `glimmer-data.tar.gz`（`PRODUCT_FILES` 里 `wubi86.qj`、`wubi98.qj`、`wubixsj.qj` 三份都在，缺一份就打不出包），本地整句模型单文件 `data/model/model.qjm`
+- `tools/release/data-bundle.sh`：把 `data/generated/` 打成 `glimmer-data.tar.gz`（`PRODUCT_FILES` 里列的文件缺一份就打不出包：三份五笔码表 `wubi86.qj`、`wubi98.qj`、`wubixsj.qj`，以及 2026-11-06 加进清单的英文语言模型 `lm-en.qj`（`dict-convert english-ngram` + `pack lm`）与误拼表 `english-misspellings.tsv`（`dict-convert english-misspellings`），生成命令见 `crate-notes.md` 的 tools/dict-convert），本地整句模型单文件 `data/model/model.qjm`
   （训练仓库导出三件套到 `data/model/`，`tools/release/pack-model.sh` 打成一个 `.qj` 容器，fp16 约 56 MB，元数据也写在那个脚本里）原样上传，
   连同 LLM 续跑中间产物 `glimmer-llm-intermediates.tar.gz` 发到下一个 `data-vN`（`--tag` 可指定，已存在就拒绝），然后改写 `data.lock`。
 - `tools/release/data-fetch.sh`：按 `data.lock` 下载（有 gh 用 gh，没有就 curl 直连）、按锁文件里的哈希校验（不信 Release 自己那份 `SHA256SUMS`），
   数据包解到 `data/generated/`、`model.qjm` 放到 `data/model/`。`release.yml` 的 macOS / Windows / Linux 三处和离线自编译走同一个脚本；
   `bundle.sh` 见到 `dict.qj` 就按产品数据打包、见到 `model.qjm` 就放进 `Resources/model/`，`glimmer.iss` 同理装进 `{app}\data\model`。
   标签与两个哈希记进 `build-info.json`（`data_tag` / `data_sha256` / `model_sha256`）。
+
+**`lm-en.qj` 与 `english-misspellings.tsv` 要等 `data-v9` 发出后才随包。** 2026-11-06 它们只进了 `data-bundle.sh` 的清单和三个壳的打包（mac `bundle.sh`、Windows `glimmer.iss`、Linux `package.sh`，都是有就带、没有就跳过），数据包还没发，`data.lock` 仍指 `data-v8`，所以 CI 出的包不带它们，英文候选按词频排、没有误拼表那一档。发 `data-v9` 要维护者确认后单独做。
 
 数据重生成之后（重跑 lexicon / bigram / gloss-gen export）或模型重训之后跑一次 `data-bundle.sh`（三件套比 `.qjm` 新会自动重打），
 把锁文件的改动提交（`chore(data): 数据 data-vN`），否则 CI 打的包还是锁文件指的旧数据。模型文件缺失或哈希不符时 CI 会失败，不会静默地发出错数据的包。
