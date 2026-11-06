@@ -71,10 +71,16 @@ cargo run --release -p glimmer-dict-convert -- pack lm --name "微明语言模�
 # 4g. 网络用语与聊天短语：assets/lexicon/04_internet_slang/slang_words.tsv（词\t次数\t拼音，汉字词；含字母的在 mixed_words.tsv）。
 #     与 domain_words / common_words 一样走 lexicon --extra-words 与 bigram --phrases，4c 那两条命令里加上它。
 #     候选表与收词标准见 04_internet_slang/README.md，做法与前后数字见 docs/notes/internet-slang.md
-# 5. 英文词表
-cargo run --release -p glimmer-dict-convert -- english assets/lexicon/05_english/00_all_words.tsv assets/lexicon/05_english/07_display_forms.tsv
-uv run tools/corpus/english_frequency.py data/generated/english.tsv -o data/generated/english-frequency.tsv
-cargo run --release -p glimmer-dict-convert -- english assets/lexicon/05_english/00_all_words.tsv assets/lexicon/05_english/07_display_forms.tsv --frequency data/generated/english-frequency.tsv
+# 5. 英文词表：两遍。第一遍没有词频表、全收；取第一列（一列单词）给 english_frequency.py 算词频（写 小写词\t词频）；
+#    english-case 从 FineWeb 训练语料数每个原样写法的次数，定同词几种大小写谁当缺省；第二遍带 --frequency 与 --case-counts，
+#    wordfreq 不认识的撇号词不收、词频为 0 的给底值 Zipf 3。展示写法 07_display_forms.tsv 是 --display-forms 的缺省值（替换同词的其他大小写写法），不当源表传
+cargo run --release -p glimmer-dict-convert -- english assets/lexicon/05_english/00_all_words.tsv
+cut -f1 data/generated/english.tsv > data/generated/english-words.txt
+uv run tools/corpus/english_frequency.py data/generated/english-words.txt -o data/generated/english-frequency.tsv
+cargo run --release -p glimmer-dict-convert -- english-case data/corpus/en/train/fineweb.txt   # 语料由 tools/corpus/english_corpus.py 生成
+cargo run --release -p glimmer-dict-convert -- english assets/lexicon/05_english/00_all_words.tsv --frequency data/generated/english-frequency.tsv --case-counts data/generated/english-case.tsv
+#    误拼表跟着词表重生成（英文语言模型 lm-en.qj 的统计与打包命令见 docs/notes/crate-notes.md 的 tools/dict-convert）
+cargo run --release -p glimmer-dict-convert -- english-misspellings
 # 5b. AI 与软件开发独立领域词库：生成主词库之后跑，不能用 --extra-words 并入主词库
 cargo run --release --locked -p glimmer-dict-convert -- ai --exclude data/generated/dict.tsv --corpus assets/lexicon/ai/corpus.txt --corpus assets/lexicon/ai/development.txt
 # 6. 打包（bundle.sh 会自动做；领域词库的 .qj 第 4 步已经写好，bundle.sh 直接拷进 Resources/dicts/）

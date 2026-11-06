@@ -1,7 +1,8 @@
 # 展示写法补充：CSpell / ESDB 里同一编码先出现全小写写法时（vscode / typescript），候选该出专名写法。
-# 只收没有普通词义的专名：windows / rust / python 也是普通英文词（the windows），不改。
-# 由 dict-convert english 作为**最后一个输入**读入：后面的文件覆盖前面同编码的写法，不动其它词的顺序。
+# 只收没有普通词义的专名：windows / rust / python 也是普通英文词（the windows），不改。代词 I 例外：永远大写，敲 i 要出 I，小写 i 不留。
+# 由 dict-convert english 的 --display-forms 读入（缺省就是本文件）：替换语义，这个写法排到同码第一，同码里只差大小写的其它写法删掉，撇号词等别的词不动。
 word	key
+I	i
 VSCode	vscode
 TypeScript	typescript
 JavaScript	javascript

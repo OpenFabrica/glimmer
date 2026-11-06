@@ -75,15 +75,92 @@ pub enum Command {
         input: PathBuf,
     },
 
-    /// 英文词表（每行 `词\t编码[\t…]`，带不带表头都行，比如 `assets/lexicon/05_english/00_all_words.tsv`）→ english.tsv
+    /// 英文词表（每行 `词\t编码[\t…]`，带不带表头都行，比如 `assets/lexicon/05_english/00_all_words.tsv`）→ english.tsv。
+    /// 一个编码可以对多个词，同码先后、展示写法替换与词频规则见 `english/words/mod.rs` 模块文档
     English {
         /// 输入文件
         #[arg(required = true)]
         inputs: Vec<PathBuf>,
 
-        /// 词频表（`编码\t词频`，`tools/corpus/english_frequency.py` 生成）；给了就写进第三列，前缀补全按它排
+        /// 词频表（`小写词\t词频`，`tools/corpus/english_frequency.py` 生成）；给了就写进第三列，前缀补全按它排
         #[arg(long)]
         frequency: Option<PathBuf>,
+
+        /// 展示写法表：替换同词的其它大小写写法并排到同码第一（typescript → TypeScript），可给多个
+        #[arg(long, default_value = "assets/lexicon/05_english/07_display_forms.tsv")]
+        display_forms: Vec<PathBuf>,
+
+        /// 词频为 0（wordfreq 不认识）的词给的底值，Zipf × 1000
+        #[arg(long, default_value_t = 3000)]
+        frequency_floor: u32,
+
+        /// 语料里原样写法的次数（`english-case` 的输出 english-case.tsv）：给了就按它定只差大小写的写法谁在前
+        #[arg(long)]
+        case_counts: Option<PathBuf>,
+
+        /// 一组只差大小写的写法语料次数合计不到这个数就不采信，沿用原规则
+        #[arg(long, default_value_t = 20)]
+        case_min_total: u64,
+    },
+
+    /// 规范书面语料（`data/corpus/en/train/fineweb.txt`；聊天、IRC 大量全小写，别给）→ english-case.tsv：
+    /// 每个原样写法（区分大小写）的出现次数，句首、全大写行与标题行不计。给 `english --case-counts` 用
+    EnglishCase {
+        /// 语料文件
+        #[arg(required = true)]
+        corpus: Vec<PathBuf>,
+
+        /// 英文词表：只输出转小写后在词表里的写法
+        #[arg(long, default_value = "data/generated/english.tsv")]
+        words: PathBuf,
+    },
+
+    /// 英文语料（一行一句或一条消息）→ lm-en-unigram.tsv / lm-en-bigram.tsv / lm-en-trigram.tsv（格式同 bigram），
+    /// 再 `pack lm --input <三个文件> --output lm-en.qj`。切词用 Core 的 `english::tokenize`，词表外的词当断开
+    EnglishNgram {
+        /// 语料文件（只给训练那份：data/corpus/en/train/*.txt）
+        #[arg(required = true)]
+        corpus: Vec<PathBuf>,
+
+        /// 英文词表：词转小写就是模型的 token
+        #[arg(long, default_value = "data/generated/english.tsv")]
+        words: PathBuf,
+
+        /// 输出文件名前缀：写 <前缀>-unigram.tsv 等
+        #[arg(long, default_value = "lm-en")]
+        prefix: String,
+
+        /// 计数低于此值的二元组不输出
+        #[arg(long, default_value_t = 3)]
+        min_count: u32,
+
+        /// 最多输出多少条二元组（按计数取前 N）
+        #[arg(long, default_value_t = 3_000_000)]
+        max_bigrams: usize,
+
+        /// 计数低于此值的三元组不输出
+        #[arg(long, default_value_t = 5)]
+        min_trigram_count: u32,
+
+        /// 最多输出多少条三元组（按计数取前 N）
+        #[arg(long, default_value_t = 10_000_000)]
+        max_trigrams: usize,
+
+        /// 统计时三元表在内存里最多留多少条（一条约 48 字节），到了就整批剪枝
+        #[arg(long, default_value_t = 40_000_000)]
+        max_trigram_entries: usize,
+    },
+
+    /// 英文误拼表（`06_misspellings.tsv`）→ english-misspellings.tsv（`误拼\t正确词`）：
+    /// 滤掉只差大小写的、正确词不在词表里的、误拼本身是词表里的词的
+    EnglishMisspellings {
+        /// 源表
+        #[arg(long, default_value = "assets/lexicon/05_english/06_misspellings.tsv")]
+        input: PathBuf,
+
+        /// 英文词表
+        #[arg(long, default_value = "data/generated/english.tsv")]
+        words: PathBuf,
     },
 
     /// Unicode CLDR emoji annotations（`annotations/<语言>/annotations.json`、`annotationsDerived/…`）→ emoji-<语言>.tsv：`词\temoji …`

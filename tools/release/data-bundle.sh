@@ -22,7 +22,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-PRODUCT_FILES=(dict.qj lm.qj glossary-en.qj glossary-ja.qj glossary-zh.qj glossary-es.qj english.tsv english-frequency.tsv wubi86.qj wubi98.qj wubixsj.qj)
+PRODUCT_FILES=(dict.qj lm.qj glossary-en.qj glossary-ja.qj glossary-zh.qj glossary-es.qj english.tsv english-frequency.tsv english-misspellings.tsv lm-en.qj wubi86.qj wubi98.qj wubixsj.qj)
 MODEL_FILE=data/model/model.qjm
 LLM_FILES=(gloss-llm.jsonl gloss-en-llm.jsonl pinyin-llm.jsonl pinyin-readings.jsonl)
 

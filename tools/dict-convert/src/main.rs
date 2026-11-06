@@ -2,7 +2,10 @@
 //!
 //! - `lexicon`：微明基础词库，「输入法字词库_分类整理版」数据包（规范字 / 常用词 / THUOCL 领域词）+ Unihan 读音 + LLM 多音字标注 → `dict.tsv`
 //! - `cedict`：CC-CEDICT（CC BY-SA 4.0）→ `glossary-en.tsv`（释义表的备用来源，现在用 gloss-gen 的 LLM 表）
-//! - `english`：`词\t编码` 英文词表（数据包的 `05_english`，ESDB / CSpell，MIT）→ `english.tsv`
+//! - `english`：`词\t编码` 英文词表（数据包的 `05_english`，ESDB / CSpell，MIT）+ 展示写法 + wordfreq 词频 → `english.tsv`（一码可多词）
+//! - `english-ngram`：英文语料（`data/corpus/en/train/`）→ `lm-en-unigram.tsv` / `lm-en-bigram.tsv` / `lm-en-trigram.tsv`，再 `pack lm --output lm-en.qj`
+//! - `english-case`：规范书面语料（FineWeb）→ `english-case.tsv`（原样写法的次数，给 `english --case-counts` 定大小写写法的先后）
+//! - `english-misspellings`：typos 误拼对照（`05_english/06_misspellings.tsv`，MIT）→ `english-misspellings.tsv`
 //! - `emoji`：Unicode CLDR annotations（Unicode License v3，`--language zh|en`）→ `emoji-<语言>.tsv`（可发布，放 `assets/emoji/`）
 //! - `bigram`：纯文本语料（如 `tools/corpus/parquet_to_text.py` 转出的中文维基 CC BY-SA 4.0、LCCC 对话 MIT）→ `lm-unigram.tsv` + `lm-bigram.tsv`
 //! - `mine`：语料里分词落成连续单字的段 → `oov-candidates.tsv`（词库没收的高频词，标音后用 `lexicon --extra-words` 并入）
@@ -79,11 +82,57 @@ fn run() -> Result<(), ConvertError> {
             &args.out_dir,
         ),
         Command::Cedict { input } => cedict::convert(&input, &args.out_dir.join("glossary-en.tsv")),
-        Command::English { inputs, frequency } => english::convert(
-            &inputs,
-            frequency.as_deref(),
-            &args.out_dir.join("english.tsv"),
+        Command::English {
+            inputs,
+            frequency,
+            display_forms,
+            frequency_floor,
+            case_counts,
+            case_min_total,
+        } => english::words(&english::WordsOptions {
+            inputs,
+            display_forms,
+            frequency,
+            frequency_floor,
+            case_counts,
+            case_min_total,
+            output: args.out_dir.join("english.tsv"),
+        }),
+        Command::EnglishCase { corpus, words } => english::case(&english::CaseOptions {
+            corpus,
+            words,
+            output: args.out_dir.join("english-case.tsv"),
+        }),
+        Command::EnglishNgram {
+            corpus,
+            words,
+            prefix,
+            min_count,
+            max_bigrams,
+            min_trigram_count,
+            max_trigrams,
+            max_trigram_entries,
+        } => english::ngram(
+            &english::NgramOptions {
+                corpus,
+                words,
+                prefix,
+                min_count,
+                max_bigrams,
+                min_trigram_count,
+                max_trigrams,
+                max_trigram_entries,
+            },
+            &args.out_dir,
         ),
+        Command::EnglishMisspellings { input, words } => {
+            english::misspellings(&english::MisspellingOptions {
+                input,
+                words,
+                output: args.out_dir.join("english-misspellings.tsv"),
+            })
+            .map(drop)
+        }
         Command::Emoji { inputs, language } => emoji::convert(
             &inputs,
             &args.out_dir.join(format!("emoji-{language}.tsv")),

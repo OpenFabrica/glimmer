@@ -23,21 +23,27 @@ mod mine;
 mod options;
 mod phrase;
 mod vocabulary;
+mod write;
 
 use std::collections::HashSet;
 use std::fs::File;
-use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 use crate::error::ConvertError;
 
-use counts::{Counts, bigram_key, trigram_parts};
+use counts::bigram_key;
 use phrase::{phrase_components, unseen_components};
 
+pub(crate) use counts::Counts;
 pub use mine::{MineOptions, mine};
 pub use options::ConvertOptions;
 pub(crate) use phrase::{phrase_count, synthesize_phrases};
 pub(crate) use vocabulary::Vocabulary;
+pub(crate) use write::{top_bigrams, write_bigram, write_trigram, write_unigram};
+
+/// 表头注释里写的子命令名。
+const COMMAND: &str = "bigram";
 
 /// 品牌词次数里几分之一算在句首（请柬 的句首占比约 1/8）。
 const BRAND_START_SHARE: u32 = 8;
@@ -125,14 +131,7 @@ pub fn convert(options: &ConvertOptions, out_dir: &Path) -> Result<(), ConvertEr
     phrase_parts.extend(unseen);
 
     // 二元：按计数降序，砍掉低频与超出上限的；短语的合成行另加，不占真实行的名额
-    let mut pairs: Vec<(u64, u32)> = counts
-        .bigram
-        .iter()
-        .map(|(k, c)| (*k, *c))
-        .filter(|(_, count)| *count >= options.min_count)
-        .collect();
-    pairs.sort_unstable_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
-    pairs.truncate(options.max_bigrams);
+    let mut pairs = top_bigrams(&counts.bigram, options.min_count, options.max_bigrams);
     if !phrase_parts.is_empty() {
         let synthesized = synthesize_phrases(
             &phrase_parts,
@@ -142,98 +141,30 @@ pub fn convert(options: &ConvertOptions, out_dir: &Path) -> Result<(), ConvertEr
         );
         pairs.extend(synthesized);
     }
-    write_bigram(&pairs, &vocabulary, out_dir)?;
+    write_bigram(
+        &pairs,
+        &vocabulary.words,
+        &out_dir.join("lm-bigram.tsv"),
+        COMMAND,
+    )?;
     let kept: HashSet<u64> = pairs.iter().map(|(key, _)| *key).collect();
-    write_trigram(&counts, &kept, &vocabulary, options, out_dir)?;
+    write_trigram(
+        &counts,
+        &kept,
+        &vocabulary.words,
+        options.min_trigram_count,
+        options.max_trigrams,
+        &out_dir.join("lm-trigram.tsv"),
+        COMMAND,
+    )?;
 
     // 一元：只输出出现过的词
-    let unigram_path = out_dir.join("lm-unigram.tsv");
-    let mut writer = BufWriter::new(File::create(&unigram_path)?);
-    writeln!(
-        writer,
-        "# 由 glimmer-dict-convert bigram 从语料统计。词\\t计数；<s> 是句首标记"
+    write_unigram(
+        &counts.unigram,
+        &vocabulary.words,
+        &out_dir.join("lm-unigram.tsv"),
+        COMMAND,
     )?;
-    let mut written = 0usize;
-    for (id, count) in counts.unigram.iter().enumerate() {
-        if *count > 0 {
-            writeln!(writer, "{}\t{count}", vocabulary.words[id])?;
-            written += 1;
-        }
-    }
-    writer.flush()?;
-    tracing::info!(unigram = %unigram_path.display(), words = written, "一元表已写出");
-    Ok(())
-}
-
-/// 写 `lm-bigram.tsv`。
-fn write_bigram(
-    pairs: &[(u64, u32)],
-    vocabulary: &Vocabulary,
-    out_dir: &Path,
-) -> Result<(), ConvertError> {
-    let path = out_dir.join("lm-bigram.tsv");
-    let mut writer = BufWriter::new(File::create(&path)?);
-    writeln!(
-        writer,
-        "# 由 glimmer-dict-convert bigram 从语料统计。前词\\t后词\\t计数"
-    )?;
-    for (key, count) in pairs {
-        let first = &vocabulary.words[(key >> 32) as usize];
-        let second = &vocabulary.words[(key & 0xFFFF_FFFF) as usize];
-        writeln!(writer, "{first}\t{second}\t{count}")?;
-    }
-    writer.flush()?;
-    tracing::info!(path = %path.display(), bigrams = pairs.len(), "二元表已写出");
-    Ok(())
-}
-
-/// 写 `lm-trigram.tsv`：只留计数够、且上文 (前二词, 前词) 自己也在二元表里的那些。
-///
-/// 上文不在二元表里的三元在模型里挂不上段（三元 CSR 的段号就是二元的下标），写出来也会被加载时丢掉，
-/// 白占几十兆文件；先在这里滤掉。
-fn write_trigram(
-    counts: &Counts,
-    kept_bigrams: &HashSet<u64>,
-    vocabulary: &Vocabulary,
-    options: &ConvertOptions,
-    out_dir: &Path,
-) -> Result<(), ConvertError> {
-    let min_count = options.min_trigram_count.max(counts.threshold() + 1);
-    let mut rows: Vec<(u128, u32)> = counts
-        .trigram
-        .iter()
-        .filter(|(_, count)| **count >= min_count)
-        .filter(|(key, _)| {
-            let (earlier, previous, _) = trigram_parts(**key);
-            kept_bigrams.contains(&bigram_key(earlier, previous))
-        })
-        .map(|(k, c)| (*k, *c))
-        .collect();
-    rows.sort_unstable_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
-    rows.truncate(options.max_trigrams);
-    let path = out_dir.join("lm-trigram.tsv");
-    let mut writer = BufWriter::new(File::create(&path)?);
-    writeln!(
-        writer,
-        "# 由 glimmer-dict-convert bigram 从语料统计。前前词\\t前词\\t后词\\t计数"
-    )?;
-    for (key, count) in &rows {
-        let (earlier, previous, word) = trigram_parts(*key);
-        writeln!(
-            writer,
-            "{}\t{}\t{}\t{count}",
-            vocabulary.words[earlier as usize],
-            vocabulary.words[previous as usize],
-            vocabulary.words[word as usize]
-        )?;
-    }
-    writer.flush()?;
-    tracing::info!(
-        path = %path.display(),
-        trigrams = rows.len(),
-        min_count,
-        "三元表已写出"
-    );
     Ok(())
 }
 

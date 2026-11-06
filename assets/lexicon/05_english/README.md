@@ -37,3 +37,15 @@ ESDB使用size≤60、variant_level≤1，选择通用/美国/英国拼写及地
 - [typos](https://github.com/crate-ci/typos)：误拼对照；上游MIT或Apache-2.0双许可，本包采用MIT。
 
 保留随附版权及许可声明。整理包含筛选、去重、字段转换及纠错目标词形过滤。原始文件哈希和获取地址见来源清单。
+
+## 语料来源与署名
+
+英文 n-gram 的训练与英文打字评测用下面的语料。`tools/corpus/english_corpus.py` 按写死的 revision 下载、清洗、去重，切成训练 / 调参 / 测试 / 验收四份。原始语料与切出的文本放 `data/`（gitignore），不进仓库、不随包分发；随包分发的只有从训练那份统计出的模型。FineWeb 训练那份另用来数每个写法的大小写次数（`dict-convert english-case`），定生成的英文词表里同一个词几种大小写写法谁当缺省（`Google` 与 `google`），随包的词表里只有排出来的先后与词频，没有语料文本。
+
+- [FineWeb](https://huggingface.co/datasets/HuggingFaceFW/fineweb)（Hugging Face，sample-10BT 的一部分）：写作类；ODC-By 1.0，须署名，使用同时受 [Common Crawl 使用条款](https://commoncrawl.org/terms-of-use) 约束。
+- [SODA](https://huggingface.co/datasets/allenai/soda)（Allen Institute for AI，Kim et al. 2023）：聊天类，合成的日常对话；CC BY 4.0，须署名。
+- [WildChat-1M](https://huggingface.co/datasets/allenai/WildChat-1M)（Allen Institute for AI，Zhao et al. 2024）：聊天类，只取用户说的话；ODC-By 1.0，须署名。
+- [Ubuntu IRC](https://huggingface.co/datasets/common-pile/ubuntu_irc_filtered)（[irclogs.ubuntu.com](https://irclogs.ubuntu.com/) 的聊天记录，Common Pile 整理）：技术类；公共领域，无署名要求，这里仍注明出处。
+- [OpenAssistant Conversations（oasst2）](https://huggingface.co/datasets/OpenAssistant/oasst2)（OpenAssistant / LAION）：聊天类，只取用户说的话；Apache-2.0，保留版权与许可声明。
+
+各语料的 revision、许可与取用量记在 `data/eval/english/SOURCES.tsv`，切出的每个文件的词数与 sha256 记在 `data/eval/english/MANIFEST.tsv`。

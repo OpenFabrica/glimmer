@@ -7,21 +7,21 @@
 
 use std::collections::HashMap;
 
-/// 语料里的 n-gram 计数。词用编号（[`Vocabulary`] 的编号），0 号是句首标记。
+/// 语料里的 n-gram 计数。词用编号（中文是 [`Vocabulary`] 的编号，英文是 `english-ngram` 的词表编号），0 号是句首标记。
 ///
 /// [`Vocabulary`]: super::Vocabulary
-pub(super) struct Counts {
+pub(crate) struct Counts {
     /// 三元表最多留多少条，到了就剪（`--max-trigram-entries`）。
     capacity: usize,
 
     /// 编号 → 一元计数。
-    pub(super) unigram: Vec<u64>,
+    pub(crate) unigram: Vec<u64>,
 
     /// (前词 << 32 | 后词) → 二元计数。
-    pub(super) bigram: HashMap<u64, u32>,
+    pub(crate) bigram: HashMap<u64, u32>,
 
     /// (前二词 << 64 | 前词 << 32 | 后词) → 三元计数。
-    pub(super) trigram: HashMap<u128, u32>,
+    pub(crate) trigram: HashMap<u128, u32>,
 
     /// 三元表上一次整批剪枝用的阈值：不超过它的条目已经被扔过一次。
     threshold: u32,
@@ -32,7 +32,7 @@ pub(super) struct Counts {
 
 impl Counts {
     /// 词数定下一元表的长度，`capacity` 是三元表的条数上限。
-    pub(super) fn new(words: usize, capacity: usize) -> Self {
+    pub(crate) fn new(words: usize, capacity: usize) -> Self {
         Self {
             capacity: capacity.max(2),
             unigram: vec![0; words],
@@ -47,7 +47,7 @@ impl Counts {
     ///
     /// 句首标记自己算一次一元，第一个词的前词是它；三元从第二个词起记（上文 `(<s>, 第一个词)`），
     /// 与模型里「句首词没有前二词」对得上。遇到 `None` 前后的 n-gram 关系都断开。
-    pub(super) fn record(&mut self, tokens: &[Option<u32>]) {
+    pub(crate) fn record(&mut self, tokens: &[Option<u32>]) {
         self.unigram[0] += 1;
         let mut previous: Option<u32> = Some(0);
         let mut earlier: Option<u32> = None;
@@ -70,7 +70,7 @@ impl Counts {
     }
 
     /// 三元表超了就整批剪：扔掉计数不超过阈值的，还不够就抬阈值再扔。
-    pub(super) fn prune_trigrams(&mut self) {
+    pub(crate) fn prune_trigrams(&mut self) {
         if self.trigram.len() <= self.capacity {
             return;
         }
@@ -91,7 +91,7 @@ impl Counts {
     }
 
     /// 剪枝抬到的阈值：输出时的 `min_trigram_count` 不该低于它，否则表里留下的和扔掉的不是一个标准。
-    pub(super) fn threshold(&self) -> u32 {
+    pub(crate) fn threshold(&self) -> u32 {
         self.threshold
     }
 }
