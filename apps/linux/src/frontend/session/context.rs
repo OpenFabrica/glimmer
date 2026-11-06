@@ -18,10 +18,10 @@ const PURPOSE_PIN: u32 = 9;
 const HINT_PRIVATE: u32 = 1 << 11;
 
 impl Session {
-    /// 组句中取一次异步结果（云联想 / 整句重排）；帧与上次画的相同就什么都不做。
+    /// 组句中取一次异步结果（云联想 / 整句重排），显示着英文预测时看它过没过期；帧与上次画的相同就什么都不做。
     pub fn poll(&mut self) -> Vec<Output> {
         let mut out = Vec::new();
-        let (true, Some(session)) = (self.composing, self.id) else {
+        let (true, Some(session)) = (self.polling(), self.id) else {
             return out;
         };
         if let Some(reply) = self.call(ClientMessage::Poll { session }) {
@@ -61,7 +61,7 @@ impl Session {
         self.set_english(!self.english)
     }
 
-    /// 应用报来光标矩形（屏幕坐标）；组句中转给 Router。
+    /// 应用报来光标矩形（屏幕坐标）；组句中或显示着预测时转给 Router。
     pub fn set_cursor_location(&mut self, x: i32, y: i32, width: i32, height: i32) {
         self.cursor = Some(ScreenRect {
             left: x,
@@ -69,7 +69,7 @@ impl Session {
             right: x.saturating_add(width),
             bottom: y.saturating_add(height),
         });
-        if self.composing {
+        if self.polling() {
             self.report_cursor();
         }
     }

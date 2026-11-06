@@ -57,8 +57,11 @@ GlimmerSession *glimmer_session_new(void);
 /* 关协议会话并释放。 */
 void glimmer_session_free(GlimmerSession *session);
 
-/* 正在组句（1 / 0）：据此开关 60 ms 轮询。 */
+/* 正在组句（1 / 0，不含英文预测）：按键前要不要同步输入框状态。 */
 int glimmer_session_composing(const GlimmerSession *session);
+
+/* 要不要开着轮询（1 / 0）：组句中或显示着英文预测，据此开关 60 ms 轮询。 */
+int glimmer_session_polling(const GlimmerSession *session);
 
 /* 当前是英文模式（1 / 0）。 */
 int glimmer_session_english(const GlimmerSession *session);

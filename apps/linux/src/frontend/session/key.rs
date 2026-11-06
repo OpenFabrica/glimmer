@@ -4,11 +4,12 @@ use glimmer_platform::protocol::{ClientMessage, KeyEvent};
 
 use super::Session;
 use crate::frontend::output::Output;
-use crate::key::{is_release, key_event, should_forward};
+use crate::key::{accepts_prediction, is_modifier, is_release, key_event, should_forward};
 
 impl Session {
     /// 处理一次 IBus 按键，返回 `(吃不吃, 要做的事)`。释放事件只喂单击 Shift 的判定、一律不吃；
-    /// 不认识的键与 [`should_forward`] 判为归应用的键不送 Router。
+    /// 不认识的键与 [`should_forward`] 判为归应用的键不送 Router。显示着英文预测时多送一个 Tab，
+    /// 其余不送的键照样归应用，只收起预测（单独按下的修饰键不收）。
     pub fn process_key(&mut self, keyval: u32, state: u32) -> (bool, Vec<Output>) {
         if is_release(state) {
             if self.shift_tap.release(keyval) {
@@ -18,10 +19,16 @@ impl Session {
         }
         self.shift_tap.press(keyval);
         let Some(event) = key_event(keyval, state, self.english) else {
-            return (false, Vec::new());
+            return (false, self.end_prediction());
         };
-        if !should_forward(&event, self.composing) {
-            return (false, Vec::new());
+        let accept = self.predicting && accepts_prediction(&event);
+        if !accept && !should_forward(&event, self.composing) {
+            let out = if is_modifier(event.virtual_key) {
+                Vec::new()
+            } else {
+                self.end_prediction()
+            };
+            return (false, out);
         }
         self.forward(event)
     }
@@ -51,6 +58,10 @@ impl Session {
             if let Some(text) = self.before_cursor.clone() {
                 self.notify(ClientMessage::Surrounding { session, text });
             }
+            self.report_cursor();
+        }
+        // 新出的预测：Router 等光标位置再记「显示过」（候选表本身由 IBus / Fcitx5 面板按应用报的光标摆）
+        if self.predicting {
             self.report_cursor();
         }
         (consumed, out)

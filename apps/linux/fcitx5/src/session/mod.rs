@@ -88,7 +88,7 @@ pub unsafe extern "C" fn glimmer_session_free(session: *mut GlimmerSession) {
     });
 }
 
-/// 正在组句（1 / 0）：C++ 据此开关 60 ms 的轮询定时器。
+/// 正在组句（1 / 0，不含英文预测）：C++ 据此决定按键前要不要同步一次输入框状态（光标矩形、前文、私密）。
 ///
 /// # Safety
 /// `session` 为空或是 `glimmer_session_new` 返回、尚未释放的指针。
@@ -97,6 +97,18 @@ pub unsafe extern "C" fn glimmer_session_composing(session: *const GlimmerSessio
     guard("glimmer_session_composing", 0, || {
         // SAFETY: 见函数的 Safety 约定
         c_int::from(unsafe { session.as_ref() }.is_some_and(|s| s.session.composing()))
+    })
+}
+
+/// 要不要开着轮询（1 / 0）：组句中，或显示着英文下一词预测（过期要靠轮询收起）。C++ 据此开关 60 ms 的轮询定时器。
+///
+/// # Safety
+/// `session` 为空或是 `glimmer_session_new` 返回、尚未释放的指针。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn glimmer_session_polling(session: *const GlimmerSession) -> c_int {
+    guard("glimmer_session_polling", 0, || {
+        // SAFETY: 见函数的 Safety 约定
+        c_int::from(unsafe { session.as_ref() }.is_some_and(|s| s.session.polling()))
     })
 }
 

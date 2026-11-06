@@ -18,7 +18,7 @@ namespace glimmer {
 
 namespace {
 
-// 组句中轮询异步结果（云联想 / 整句重排）的间隔（微秒），与 IBus 前端一致。
+// 组句中轮询异步结果（云联想 / 整句重排）、显示着英文预测时看它过没过期的间隔（微秒），与 IBus 前端一致。
 constexpr uint64_t POLL_INTERVAL_USEC = 60 * 1000;
 
 // C 字符串转 std::string，空指针为空串。
@@ -156,7 +156,7 @@ void GlimmerState::applyPreedit(GlimmerOutputs *outputs, size_t index) {
 }
 
 void GlimmerState::schedulePoll() {
-    if (pollArmed_ || !glimmer_session_composing(session_)) {
+    if (pollArmed_ || !glimmer_session_polling(session_)) {
         return;
     }
     pollArmed_ = true;
@@ -169,7 +169,7 @@ void GlimmerState::schedulePoll() {
         CLOCK_MONOTONIC, fcitx::now(CLOCK_MONOTONIC) + POLL_INTERVAL_USEC, 0,
         [this](fcitx::EventSourceTime *, uint64_t) {
             pollArmed_ = false;
-            // apply 末尾的 schedulePoll 在还组句时重排本定时器
+            // apply 末尾的 schedulePoll 在还要轮询（组句中 / 显示着预测）时重排本定时器
             apply(glimmer_session_poll(session_));
             return true;
         });

@@ -8,6 +8,7 @@ mod row;
 use glimmer_core::{Candidate, Sense};
 use glimmer_platform::LayoutMode;
 use glimmer_platform::protocol::{Frame, PreeditKind};
+use glimmer_server::dispatch::{is_next_word_frame, next_word_label};
 
 pub use candidates::CandidateView;
 pub use preedit::PreeditView;
@@ -46,12 +47,37 @@ pub fn preedit_view(frame: &Frame) -> Option<PreeditView> {
     })
 }
 
-/// 当前页候选；空页返回 `None`。
+/// 数字键能选到的候选数，之后的候选不给序号。
+const LABELED: usize = 9;
+
+/// 英文下一词预测帧（判定在 Server 那边，Windows 候选窗也用它）。
+/// 预测不算组句：不碰应用里的 preedit，送键规则照没在组句，只多送一个 Tab。
+pub fn is_prediction(frame: &Frame) -> bool {
+    is_next_word_frame(frame)
+}
+
+/// 当前页候选；空页返回 `None`。英文下一词预测只有 Tab 能接：第一行序号是 ⇥、其余不标，免得用户去按数字。
 pub fn candidate_view(frame: &Frame) -> Option<CandidateView> {
     if frame.candidates.items.is_empty() {
         return None;
     }
-    let rows = frame.candidates.items.iter().map(row).collect();
+    let next_word = is_prediction(frame);
+    let rows = frame
+        .candidates
+        .items
+        .iter()
+        .enumerate()
+        .map(|(position, candidate)| {
+            let label = if next_word {
+                next_word_label(position).to_owned()
+            } else if position < LABELED {
+                (position + 1).to_string()
+            } else {
+                String::new()
+            };
+            row(label, candidate)
+        })
+        .collect();
     Some(CandidateView {
         rows,
         highlight: frame.highlight,
@@ -73,12 +99,13 @@ pub fn auxiliary_text(frame: &Frame) -> Option<String> {
 }
 
 /// 一个候选：译文的各条释义用「; 」连起来当注解，译词带读音时接在后面（開発(かいはつ)する、develop (dɪˈvɛləp)）。
-fn row(candidate: &Candidate) -> CandidateRow {
+fn row(label: String, candidate: &Candidate) -> CandidateRow {
     let annotation = candidate.translation.as_ref().and_then(|translation| {
         let senses: Vec<String> = translation.senses().iter().map(sense_text).collect();
         (!senses.is_empty()).then(|| senses.join("; "))
     });
     CandidateRow {
+        label,
         text: candidate.text.clone(),
         annotation,
     }
@@ -138,6 +165,43 @@ mod tests {
         assert!(preedit_view(&frame).is_none());
         assert!(candidate_view(&frame).is_none());
         assert!(auxiliary_text(&frame).is_none());
+    }
+
+    #[test]
+    fn next_word_frame_is_labelled_with_tab_only() {
+        use glimmer_core::{CandidateKind, CandidateList};
+
+        let word = |text: &str| Candidate {
+            text: text.to_owned(),
+            kind: CandidateKind::English,
+            syllables: Vec::new(),
+            reading: None,
+            translation: None,
+        };
+        let predicted = Frame {
+            candidates: CandidateList {
+                items: vec![word("world"), word("there")],
+            },
+            ..Frame::default()
+        };
+        let labels: Vec<String> = candidate_view(&predicted)
+            .unwrap()
+            .rows
+            .into_iter()
+            .map(|row| row.label)
+            .collect();
+        assert_eq!(labels, ["⇥", ""]);
+        let composing = Frame {
+            preedit: vec![segment("wor", PreeditKind::Typed)],
+            ..predicted
+        };
+        let labels: Vec<String> = candidate_view(&composing)
+            .unwrap()
+            .rows
+            .into_iter()
+            .map(|row| row.label)
+            .collect();
+        assert_eq!(labels, ["1", "2"]);
     }
 
     #[test]

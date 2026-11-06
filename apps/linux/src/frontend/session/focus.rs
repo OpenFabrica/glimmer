@@ -62,12 +62,14 @@ impl Session {
             self.notify(ClientMessage::CloseSession { session });
         }
         self.composing = false;
+        self.predicting = false;
         self.last_frame = Frame::default();
     }
 
-    /// 组句中就让 Router 交出缓冲区原文并清空，上屏并收起 preedit / 候选表（切中英模式时用，那时应用仍聚焦）。
+    /// 组句中就让 Router 交出缓冲区原文并清空，上屏并收起 preedit / 候选表（切中英模式时用，那时应用仍聚焦）；
+    /// 显示着英文预测时同样经 `Commit` 让 Router 收起（交出的是空的）。
     pub(super) fn commit_pending(&mut self, out: &mut Vec<Output>) {
-        if !self.composing {
+        if !self.composing && !self.predicting {
             return;
         }
         let Some(session) = self.id else {
@@ -82,9 +84,10 @@ impl Session {
         }
     }
 
-    /// 组句中就让 Router 清空缓冲区、丢掉交出的原文，只收起 preedit / 候选表。
+    /// 组句中或显示着英文预测时让 Router 清空缓冲区、丢掉交出的原文，只收起 preedit / 候选表。
+    /// 应用要求重置（点了别处）也走这里：预测是光标原处的，不能留到 Tab。
     fn discard_pending(&mut self, out: &mut Vec<Output>) {
-        if !self.composing {
+        if !self.composing && !self.predicting {
             return;
         }
         if let Some(session) = self.id {

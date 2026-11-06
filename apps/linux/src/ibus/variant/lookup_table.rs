@@ -17,22 +17,14 @@ const HORIZONTAL: i32 = 0;
 /// `IBUS_ORIENTATION_VERTICAL`。
 const VERTICAL: i32 = 1;
 
-/// 数字键能选到的候选数，之后的候选不给标签。
-const LABELED: usize = 9;
-
 /// 当前页编码成一张候选表：页大小就是本页条数（ibus 限定 1..=16），不循环。
 pub fn lookup_table(view: &CandidateView) -> Value<'static> {
     let candidates: Vec<Value<'static>> =
         view.rows.iter().map(|row| boxed(candidate(row))).collect();
-    let labels: Vec<Value<'static>> = (0..view.rows.len())
-        .map(|index| {
-            let label = if index < LABELED {
-                (index + 1).to_string()
-            } else {
-                String::new()
-            };
-            boxed(text(&label, &[]))
-        })
+    let labels: Vec<Value<'static>> = view
+        .rows
+        .iter()
+        .map(|row| boxed(text(&row.label, &[])))
         .collect();
     let page_size = view.rows.len().clamp(1, 16) as u32;
     serializable(
@@ -73,10 +65,12 @@ mod tests {
         let view = CandidateView {
             rows: vec![
                 CandidateRow {
+                    label: "1".to_owned(),
                     text: "你好".to_owned(),
                     annotation: Some("hello".to_owned()),
                 },
                 CandidateRow {
+                    label: "2".to_owned(),
                     text: "拟好".to_owned(),
                     annotation: None,
                 },
@@ -99,6 +93,7 @@ mod tests {
     #[test]
     fn annotation_is_appended_and_grayed() {
         let row = CandidateRow {
+            label: "1".to_owned(),
             text: "你好".to_owned(),
             annotation: Some("hello".to_owned()),
         };

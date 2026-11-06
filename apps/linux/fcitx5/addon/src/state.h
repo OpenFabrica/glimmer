@@ -65,7 +65,7 @@ private:
     // 画 preedit：客户端支持内联 preedit 就放客户端，否则放面板。
     void applyPreedit(GlimmerOutputs *outputs, size_t index);
 
-    // 组句中确保 60 ms 轮询在排着；不在组句就让它自然停下。
+    // 组句中或显示着英文预测时确保 60 ms 轮询在排着；都不是就让它自然停下。
     void schedulePoll();
 
     // 所属引擎。

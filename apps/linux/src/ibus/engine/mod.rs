@@ -35,7 +35,7 @@ impl Engine {
         }
     }
 
-    /// 在持有会话锁的情况下跑 `handle`，发出它产出的信号，组句中就确保轮询在跑。
+    /// 在持有会话锁的情况下跑 `handle`，发出它产出的信号，组句中或显示着英文预测时就确保轮询在跑。
     /// 锁一直持有到信号发完，轮询任务的重绘不会插到按键的信号中间。
     async fn run<T>(
         &self,
@@ -45,9 +45,9 @@ impl Engine {
         let mut session = self.session.lock().await;
         let (result, outputs) = handle(&mut session);
         emit::emit(emitter, outputs).await;
-        let composing = session.composing();
+        let polling = session.polling();
         drop(session);
-        if composing {
+        if polling {
             poll::ensure(&self.session, &self.polling, emitter);
         }
         result

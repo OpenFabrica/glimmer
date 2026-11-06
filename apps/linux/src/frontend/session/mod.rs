@@ -2,6 +2,9 @@
 //! 把 IBus 的事件翻成 [`ClientMessage`]、把 [`ServerMessage`] 摊成 [`Output`]。不依赖 D-Bus，单测直接驱动。
 //!
 //! 按职责拆成子模块：按键与中英切换在 `key`，焦点 / 重置 / 上屏在 `focus`，其余 IBus 事件（翻页、点选、光标、前文、轮询）在 `context`。
+//!
+//! 英文下一词预测（帧里没有 preedit、只有候选）不算组句：送键规则照没在组句，只多送一个 Tab；
+//! 其余不送的键照常交给应用，并通知 Router 收起；轮询照开（过期要靠它收起）。
 
 mod context;
 mod focus;
@@ -14,7 +17,7 @@ use glimmer_platform::protocol::{
 };
 
 use super::output::Output;
-use super::view::{auxiliary_text, candidate_view, preedit_view};
+use super::view::{auxiliary_text, candidate_view, is_prediction, preedit_view};
 use crate::backend::SharedBackend;
 use crate::key::ShiftTap;
 
@@ -35,8 +38,11 @@ pub struct Session {
     /// 持久的英文模式（单击 Shift / 点属性切换）。
     english: bool,
 
-    /// 正在组句（上一帧不空）。
+    /// 正在组句（上一帧有 preedit 或是组句中的候选，不含英文预测）。
     composing: bool,
+
+    /// 显示着英文下一词预测（上一帧没有 preedit、只有候选）。
+    predicting: bool,
 
     /// 单击 Shift 的判定。
     shift_tap: ShiftTap,
@@ -69,6 +75,7 @@ impl Session {
             app: None,
             english: false,
             composing: false,
+            predicting: false,
             shift_tap: ShiftTap::default(),
             before_cursor: None,
             cursor: None,
@@ -78,9 +85,19 @@ impl Session {
         }
     }
 
-    /// 正在组句：IBus 层据此开关轮询。
+    /// 正在组句（不含英文预测）。开关轮询看 [`Self::polling`]。
     pub fn composing(&self) -> bool {
         self.composing
+    }
+
+    /// 显示着英文下一词预测。
+    pub fn predicting(&self) -> bool {
+        self.predicting
+    }
+
+    /// 要不要开着轮询：组句中（云联想 / 整句重排）或显示着预测（过期要靠轮询收起）。
+    pub fn polling(&self) -> bool {
+        self.composing || self.predicting
     }
 
     /// 当前是不是英文模式。
@@ -152,8 +169,13 @@ impl Session {
             } => {
                 let consumed = outcome == KeyOutcome::Consumed;
                 // 放行的键 Router 没动缓冲区，不碰 preedit（与 DLL 一致），只同步组句状态。
+                // 预测显示着时放行（数字、标点）Router 已收起预测：候选表跟着收，preedit 本来就是空的、不碰。
                 if !consumed {
-                    self.composing = !frame.is_empty();
+                    if self.predicting || is_prediction(&frame) {
+                        self.render(frame, out);
+                    } else {
+                        self.sync_state(&frame);
+                    }
                     return false;
                 }
                 if let Some(text) = commit {
@@ -195,11 +217,37 @@ impl Session {
     }
 
     /// 画一帧：preedit、辅助文字、候选表依次更新或收起。
+    /// 进出英文预测（前后两帧都没有 preedit）时不发 preedit：应用里本来就没有，免得多一次空的 preedit 更新。
     fn render(&mut self, frame: Frame, out: &mut Vec<Output>) {
-        self.composing = !frame.is_empty();
-        out.push(Output::Preedit(preedit_view(&frame)));
+        let prediction_only = self.last_frame.preedit.is_empty()
+            && frame.preedit.is_empty()
+            && (is_prediction(&frame) || is_prediction(&self.last_frame));
+        self.sync_state(&frame);
+        if !prediction_only {
+            out.push(Output::Preedit(preedit_view(&frame)));
+        }
         out.push(Output::Auxiliary(auxiliary_text(&frame)));
         out.push(Output::Candidates(candidate_view(&frame)));
         self.last_frame = frame;
+    }
+
+    /// 按帧记下在不在组句、是不是显示着英文预测。
+    fn sync_state(&mut self, frame: &Frame) {
+        self.predicting = is_prediction(frame);
+        self.composing = !frame.is_empty() && !self.predicting;
+    }
+
+    /// 显示着英文预测时按了不送 Router 的键（那个键原样交给应用）：通知 Router 收起（它同时作废英文上文），收起候选表。
+    /// 没显示预测时什么都不做。
+    fn end_prediction(&mut self) -> Vec<Output> {
+        let mut out = Vec::new();
+        if !self.predicting {
+            return out;
+        }
+        if let Some(session) = self.id {
+            self.notify(ClientMessage::HideCandidates { session });
+        }
+        self.render(Frame::default(), &mut out);
+        out
     }
 }

@@ -16,9 +16,6 @@ use super::{
     GLIMMER_OUTPUT_MODE, GLIMMER_OUTPUT_PREEDIT,
 };
 
-/// 数字键能选到的候选数，之后的候选不给标签（与 IBus 的候选表一致）。
-const LABELED: usize = 9;
-
 /// 一条指令；各字段只对相应的 `kind` 有意义，其余保持缺省。
 #[derive(Debug, Default)]
 pub struct Entry {
@@ -117,7 +114,7 @@ fn preedit(view: Option<PreeditView>) -> Entry {
     }
 }
 
-/// 候选页：补上数字标签与翻页可用性。
+/// 候选页：序号（前端已按数字键 / 英文预测算好）与翻页可用性。
 fn candidates(view: Option<CandidateView>) -> Entry {
     let Some(view) = view else {
         return Entry {
@@ -128,13 +125,8 @@ fn candidates(view: Option<CandidateView>) -> Entry {
     let candidates = view
         .rows
         .iter()
-        .enumerate()
-        .map(|(index, row)| Candidate {
-            label: c_string(&if index < LABELED {
-                (index + 1).to_string()
-            } else {
-                String::new()
-            }),
+        .map(|row| Candidate {
+            label: c_string(&row.label),
             text: c_string(&row.text),
             comment: row.annotation.as_deref().map(c_string),
         })

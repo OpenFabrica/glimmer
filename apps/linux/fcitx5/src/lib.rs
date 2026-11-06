@@ -27,8 +27,9 @@ pub use session::{
     GlimmerSession, glimmer_session_composing, glimmer_session_english, glimmer_session_focus_in,
     glimmer_session_focus_out, glimmer_session_free, glimmer_session_key,
     glimmer_session_move_cursor, glimmer_session_new, glimmer_session_page, glimmer_session_poll,
-    glimmer_session_reset, glimmer_session_select, glimmer_session_set_cursor_rect,
-    glimmer_session_set_private, glimmer_session_set_surrounding, glimmer_session_toggle_mode,
+    glimmer_session_polling, glimmer_session_reset, glimmer_session_select,
+    glimmer_session_set_cursor_rect, glimmer_session_set_private, glimmer_session_set_surrounding,
+    glimmer_session_toggle_mode,
 };
 
 /// 跑一段可能 panic 的代码；panic 了记日志并返回 `fallback`，不让 unwind 穿过 C 调用方。

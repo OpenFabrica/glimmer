@@ -186,6 +186,14 @@ if [[ -f "$GEN/dict.qj" ]]; then
       echo "警告: 缺 $GEN/$f，包里不带它" >&2
     fi
   done
+  # 英文语言模型与误拼表可选：没有就不带，英文候选按词频排、少一档纠错
+  for f in lm-en.qj english-misspellings.tsv; do
+    if [[ -f "$GEN/$f" ]]; then
+      install -D -m 644 "$GEN/$f" "$LIB/data/generated/$f"
+    else
+      echo "注意: 没有 $GEN/$f，包里不带它" >&2
+    fi
+  done
   if ls "$GEN"/dicts/*.qj >/dev/null 2>&1; then
     install -d -m 755 "$LIB/data/generated/dicts"
     install -m 644 "$GEN"/dicts/*.qj "$LIB/data/generated/dicts/"

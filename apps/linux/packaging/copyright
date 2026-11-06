@@ -61,6 +61,51 @@ Copyright: 中文维基百科贡献者；LCCC（清华大学 CoAI）
 License: CC-BY-SA-4.0 and MIT
  语言模型由中文维基百科（CC BY-SA 4.0）与 LCCC（MIT）统计得到。
 
+Files: usr/lib/glimmer/data/generated/lm-en.qj
+Copyright: FineWeb（Hugging Face）；SODA（Allen Institute for AI，Kim et al. 2023）；
+ WildChat-1M（Allen Institute for AI，Zhao et al. 2024）；Ubuntu IRC（irclogs.ubuntu.com 聊天记录，Common Pile 整理）；
+ OpenAssistant Conversations oasst2（OpenAssistant / LAION）
+License: ODC-By-1.0 and CC-BY-4.0 and Apache-2.0
+ 英文语言模型由五个语料的训练部分统计得到，语料本身不随包分发：
+ FineWeb（https://huggingface.co/datasets/HuggingFaceFW/fineweb，ODC-By 1.0，使用同时受 Common Crawl 使用条款约束）、
+ SODA（https://huggingface.co/datasets/allenai/soda，CC BY 4.0）、
+ WildChat-1M（https://huggingface.co/datasets/allenai/WildChat-1M，ODC-By 1.0）、
+ Ubuntu IRC（https://huggingface.co/datasets/common-pile/ubuntu_irc_filtered，公共领域）、
+ OpenAssistant oasst2（https://huggingface.co/datasets/OpenAssistant/oasst2，Apache-2.0）。
+ 来源与署名见 https://github.com/OpenFabrica/glimmer/tree/main/assets/lexicon/05_english 。
+ .
+ ODC-By 1.0 全文见 https://opendatacommons.org/licenses/by/1-0/ ，
+ CC BY 4.0 全文见 https://creativecommons.org/licenses/by/4.0/legalcode 。
+ On Debian systems, the complete text of the Apache License version 2.0
+ can be found in "/usr/share/common-licenses/Apache-2.0".
+
+Files: usr/lib/glimmer/data/generated/english-misspellings.tsv
+Copyright: typos 贡献者（Individual contributors），https://github.com/crate-ci/typos
+License: MIT
+ 英文误拼表由 assets/lexicon/05_english/06_misspellings.tsv 转换而来，后者整理自 typos 的误拼对照
+ （上游 MIT 或 Apache-2.0 双许可，本包采用 MIT）。来源见
+ https://github.com/OpenFabrica/glimmer/tree/main/assets/lexicon/05_english 。
+ .
+ Copyright (c) Individual contributors
+ .
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
+ .
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
+ .
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
+
 Files: usr/lib/glimmer/assets/emoji/*
 Copyright: Unicode, Inc. (CLDR)
 License: Unicode-3.0

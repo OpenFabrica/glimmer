@@ -39,7 +39,9 @@ GlimmerCandidateList::GlimmerCandidateList(GlimmerState *state, const GlimmerOut
     const size_t count = glimmer_outputs_candidate_count(outputs, index);
     for (size_t j = 0; j < count; ++j) {
         const std::string label = str(glimmer_outputs_candidate_label(outputs, index, j));
-        labels_.emplace_back(label.empty() ? std::string() : label + ". ");
+        // 数字序号写成「1. 」；英文下一词预测的「⇥」（只有 Tab 能接）后面只空一格
+        const bool numbered = !label.empty() && label.back() >= '0' && label.back() <= '9';
+        labels_.emplace_back(label.empty() ? std::string() : label + (numbered ? ". " : " "));
         words_.push_back(std::make_unique<GlimmerCandidateWord>(
             state, static_cast<int>(j), glimmer_outputs_candidate_text(outputs, index, j),
             glimmer_outputs_comment(outputs, index, j)));

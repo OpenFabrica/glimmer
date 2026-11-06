@@ -1,5 +1,5 @@
 //! 组句中的定时轮询（对应 tsf 的 `PollTimer`）：云联想 / 整句重排的结果是异步到的，没有新按键时靠它拉回来重绘。
-//! 一个引擎实例最多一个轮询任务；不在组句就退出，下次组句再起。
+//! 一个引擎实例最多一个轮询任务；不在组句、也没显示英文预测就退出，下次再起（预测过期要靠它收起）。
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -33,8 +33,8 @@ pub(super) fn ensure(
         loop {
             tokio::time::sleep(INTERVAL).await;
             let mut guard = session.lock().await;
-            // 「不在组句就退出」与清标志必须在同一段锁里：按键处理在锁外看标志决定要不要重起任务。
-            if !guard.composing() {
+            // 「不用轮询就退出」与清标志必须在同一段锁里：按键处理在锁外看标志决定要不要重起任务。
+            if !guard.polling() {
                 polling.store(false, Ordering::SeqCst);
                 return;
             }

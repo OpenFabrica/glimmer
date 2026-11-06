@@ -183,7 +183,12 @@ fn preedit_splits_dimmed_segments_and_counts_cursor_in_bytes() {
 #[test]
 fn candidate_page_flags_and_labels() {
     let rows = (0..10)
-        .map(|index| CandidateRow {
+        .map(|index: usize| CandidateRow {
+            label: if index < 9 {
+                (index + 1).to_string()
+            } else {
+                String::new()
+            },
             text: format!("词{index}"),
             annotation: None,
         })
