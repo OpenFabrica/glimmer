@@ -18,6 +18,8 @@ impl Router {
             return effect;
         }
         if event.modifiers.has_command_key() {
+            // 带 Ctrl / Alt / Win 的组合键交给应用（撤销、全选、按词跳光标……）：英文上文可能已经不对了
+            self.engine.break_english_context();
             return Effect::Passthrough;
         }
         let Some(c) = event.character.filter(|c| !c.is_control()) else {
@@ -84,9 +86,12 @@ impl Router {
     /// 退格 / Esc / 回车 / Tab / 方向键；没在组句时都交还应用。
     fn apply_function_key(&mut self, event: &KeyEvent) -> Effect {
         if !self.composing() {
-            // 回车交给应用：文本流里是一个段落边界（macOS 壳同样记）
+            // 回车交给应用：文本流里是一个段落边界（macOS 壳同样记）；
+            // 其余功能键（方向、Home / End、翻页、退格、Delete、Tab、Esc）可能动了光标或删了字，英文上文作废
             if event.virtual_key == codes::RETURN {
                 self.engine.note_passthrough('\n');
+            } else {
+                self.engine.break_english_context();
             }
             return Effect::Passthrough;
         }
@@ -158,7 +163,11 @@ impl Router {
                 self.engine.move_cursor_end();
                 Effect::Changed(None)
             }
-            _ => Effect::Passthrough,
+            // 组句中不认识的功能键原样交给应用：同样可能动了光标
+            _ => {
+                self.engine.break_english_context();
+                Effect::Passthrough
+            }
         }
     }
 

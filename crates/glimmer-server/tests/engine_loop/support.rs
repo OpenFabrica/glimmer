@@ -1,9 +1,10 @@
-//! 各模块共用的零件：造 Router、造按键、拆回话、假的状态条与打分器。
+//! 各模块共用的零件：造 Router、造按键、拆回话、假的状态条、打分器与英文语言模型。
 
 pub use std::path::PathBuf;
 pub use std::sync::{Arc, Mutex};
 
-pub use glimmer_core::sentence::SentenceScorer;
+pub use glimmer_core::english::NgramHistory;
+pub use glimmer_core::sentence::{Context, LanguageModel, SentenceScorer};
 pub use glimmer_core::{Language, ModeKeys, ShuangpinScheme};
 pub use glimmer_platform::protocol::{
     ClientMessage, Frame, KeyEvent, KeyModifiers, KeyOutcome, PROTOCOL_VERSION, ServerMessage,
@@ -299,4 +300,104 @@ pub fn tick_until_first(router: &mut Router, text: &str, timeout: std::time::Dur
 
 pub fn press_in(router: &mut Router, session: SessionId, event: KeyEvent) {
     let _ = router.handle(ClientMessage::Key { session, event });
+}
+
+/// 假英文语言模型：只有手写的几条二元（概率, 次数），够下一词预测一路接下去：hello → world → the → 没了。
+pub struct ChainModel(pub &'static [(&'static str, &'static str, f64, u32)]);
+
+impl ChainModel {
+    /// `previous` 之后的二元后继。
+    fn after(
+        &self,
+        previous: &str,
+    ) -> impl Iterator<Item = &(&'static str, &'static str, f64, u32)> {
+        self.0.iter().filter(move |(p, ..)| *p == previous)
+    }
+
+    /// `previous` 之后 `word` 的概率；没有这条二元为 `None`。
+    fn probability(&self, previous: Option<&str>, word: &str) -> Option<f64> {
+        let previous = previous?;
+        self.after(previous)
+            .find(|(_, w, ..)| *w == word)
+            .map(|(_, _, p, _)| *p)
+    }
+}
+
+impl LanguageModel for ChainModel {
+    /// 只看前一个词的二元概率。
+    fn log_prob(&self, context: Context<'_>, word: &str) -> Option<f64> {
+        self.probability(context.previous, word).map(f64::ln)
+    }
+
+    /// 逐词查前一个词的二元概率；不知道上文时全是 `None`。
+    fn log_probs(&self, history: NgramHistory<'_>, words: &[&str]) -> Vec<Option<f64>> {
+        words
+            .iter()
+            .map(|word| self.probability(history.previous(), word).map(f64::ln))
+            .collect()
+    }
+
+    /// 前一个词的二元后继（预测从这里取候选）。
+    fn successors(
+        &self,
+        history: NgramHistory<'_>,
+        keep: &mut dyn FnMut(&str) -> bool,
+    ) -> Vec<(String, u32)> {
+        // 只有二元：知道前两个词时三元那一路给空，Core 再并上前一个词的二元
+        let previous = match history {
+            NgramHistory::Previous(previous) => previous,
+            NgramHistory::Context(context) if context.earlier.is_none() => {
+                let Some(previous) = context.previous else {
+                    return Vec::new();
+                };
+                previous
+            }
+            _ => return Vec::new(),
+        };
+        self.after(previous)
+            .filter(|(_, w, ..)| keep(w))
+            .map(|(_, w, _, count)| ((*w).to_owned(), *count))
+            .collect()
+    }
+}
+
+/// 样例词表里的一条预测链：hello → world → the，the 之后没有后继。
+pub const CHAIN: &[(&str, &str, f64, u32)] =
+    &[("hello", "world", 0.6, 600), ("world", "the", 0.5, 500)];
+
+/// 装了假英文语言模型、能出下一词预测的 Router；`prediction` 是 `[general] english_prediction`。
+pub fn router_predicting(prediction: bool) -> Router {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut engine = assembly::assemble(&AssemblySpec {
+        english: Some(root.join("assets/sample/english.tsv")),
+        ..AssemblySpec::new(root.join("assets/sample/dict.tsv"))
+    })
+    .expect("assemble engine from sample data")
+    .with_english_lm(Box::new(ChainModel(CHAIN)));
+    engine.set_english_prediction(prediction);
+    let mut router = Router::new(engine, RouterConfig::default());
+    router.handle(ClientMessage::OpenSession {
+        session: SESSION,
+        app: None,
+        protocol: PROTOCOL_VERSION,
+    });
+    router
+}
+
+/// 英文模式的空格。
+pub fn english_space() -> KeyEvent {
+    KeyEvent::new(0x20, Some(' '), ENGLISH)
+}
+
+/// 英文模式的功能键（无字符）。
+pub fn english_key(virtual_key: u32) -> KeyEvent {
+    KeyEvent::new(virtual_key, None, ENGLISH)
+}
+
+/// 拉一次轮询，返回帧。
+pub fn poll(router: &mut Router) -> Frame {
+    match router.handle(ClientMessage::Poll { session: SESSION }) {
+        Some(ServerMessage::Update { frame, .. }) => frame,
+        other => panic!("expected Update, got {other:?}"),
+    }
 }

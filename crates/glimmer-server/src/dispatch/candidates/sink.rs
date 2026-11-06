@@ -34,6 +34,12 @@ pub trait CandidateSink: Send {
 
     /// 换画法：装上时与配置热加载后调，只在设置变了时调。
     fn configure(&self, settings: RenderSettings);
+
+    /// 候选窗是不是由这个输出端画（Windows Server 自绘）。不是的（Linux 由 IBus / Fcitx5 面板按回话里的帧画）
+    /// 帧随按键回话一出去就算显示了；是的要等 [`Self::show`] 真调过，英文预测才算用户看得见、Tab 才接受。
+    fn draws(&self) -> bool {
+        true
+    }
 }
 
 /// 不画候选窗口的空实现。
@@ -45,4 +51,9 @@ impl CandidateSink for NoopSink {
     fn hide(&self) {}
 
     fn configure(&self, _settings: RenderSettings) {}
+
+    /// 什么都不画：候选由壳自己画。
+    fn draws(&self) -> bool {
+        false
+    }
 }

@@ -42,12 +42,16 @@ impl Router {
     }
 
     /// DLL 报来该会话的输入框私密与否变了：记下；是当前会话就立刻让 Engine 进 / 出私密。
+    /// 私密状态晚到（Windows 在起组句的异步编辑会话里才报）时可能已经出了英文预测：变成私密就收起它。
     pub(super) fn set_privacy(&mut self, session: SessionId, private: bool) {
         if let Some(info) = self.sessions.get_mut(&session) {
             info.private = private;
         }
         if self.focused == Some(session) {
             self.engine.set_private(private);
+            if private && self.end_english_prediction() {
+                self.hide_candidate_window();
+            }
         }
     }
 
@@ -59,7 +63,7 @@ impl Router {
         text
     }
 
-    /// 清掉组句、展示状态、在飞的云联想与翻译评审，收起候选窗口。
+    /// 清掉组句、展示状态、在飞的云联想、翻译评审与英文预测，收起候选窗口。
     pub(super) fn reset_composition(&mut self) {
         self.engine.break_chain();
         self.engine.clear();
@@ -67,6 +71,7 @@ impl Router {
         self.stop_rescoring();
         self.composed = None;
         self.translation = None;
+        self.english_next = None;
         self.pending_selection = None;
         self.sentence = None;
         self.notice = None;

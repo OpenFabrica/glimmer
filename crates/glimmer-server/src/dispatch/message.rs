@@ -69,14 +69,23 @@ impl Router {
             }
             ClientMessage::HideCandidates { session } => {
                 // 组句在 DLL 侧结束（应用终止组句 / 翻译评审失焦）：只收窗口；缓冲留给下一键的 Commit 清。
+                // 显示着英文预测时壳也发它：预测时按了壳不送来的键（空格、退格、方向键、Ctrl 组合……），
+                // 那个键已经原样交给应用、Core 没看到，照这些键本来的规则把英文上文作废。
                 if self.focused == Some(session) {
                     self.end_translation();
+                    if self.end_english_prediction() {
+                        self.engine.break_english_context();
+                    }
                     self.hide_candidate_window();
                 }
                 None
             }
             ClientMessage::ModeChanged { session, english } => {
                 tracing::debug!(?session, english, "中英模式");
+                // 切中英 / 获焦时报模式：预测不跨模式留着
+                if self.focused == Some(session) && self.end_english_prediction() {
+                    self.hide_candidate_window();
+                }
                 self.handle_mode_changed(english);
                 None
             }
@@ -86,6 +95,9 @@ impl Router {
             }),
             ClientMessage::ImeSwitched { session } => {
                 tracing::debug!(?session, "切成了别的输入法");
+                if self.end_english_prediction() {
+                    self.hide_candidate_window();
+                }
                 self.handle_ime_switched();
                 None
             }
@@ -102,16 +114,34 @@ impl Router {
         }
     }
 
+    /// 一次按键：翻译评审优先；显示着英文预测时 Tab 接受、其余键先收起预测再照原来的路走；最后看要不要出新的预测。
     fn handle_key(&mut self, session: SessionId, event: KeyEvent) -> ServerMessage {
         self.ensure_focus(session);
         self.notice = None;
         if self.translation.is_some() {
             return self.handle_translation_review(session, &event);
         }
+        let visible = self.english_prediction_visible();
+        let predicted = self.end_english_prediction();
+        if let Some(text) = self.accept_english_prediction_key(predicted && visible, &event) {
+            // 接受后上文前移一个词、又是「刚敲过空格」，马上取再下一个
+            self.refresh_english_prediction();
+            let frame = self.current_frame();
+            self.reconcile_candidates(&frame);
+            return ServerMessage::KeyResult {
+                session,
+                outcome: KeyOutcome::Consumed,
+                commit: Some(text),
+                frame,
+            };
+        }
         if self.engine.composition().is_empty()
             && self.engine.prediction_enabled()
             && self.matches_translate_combo(&event)
         {
+            if predicted {
+                self.hide_candidate_window();
+            }
             self.selection_seq += 1;
             self.pending_selection = Some(self.selection_seq);
             tracing::debug!(
@@ -132,6 +162,10 @@ impl Router {
             Effect::Navigated => (None, KeyOutcome::Consumed),
             Effect::Passthrough => (None, KeyOutcome::Passthrough),
         };
+        // 预测显示着时按的别的键只收起预测：连敲第二个空格 Core 仍算「刚敲过空格」，但那不该把预测再弹出来
+        if !predicted {
+            self.refresh_english_prediction();
+        }
         self.poll_prediction();
         let frame = self.current_frame();
         self.reconcile_candidates(&frame);
@@ -151,6 +185,7 @@ impl Router {
             tracing::info!(learned, "释义兜底写入个人释义表");
         }
         let frame = if self.focused == Some(session) {
+            self.expire_english_prediction();
             self.poll_prediction();
             let frame = self.current_frame();
             self.reconcile_candidates(&frame);

@@ -179,6 +179,8 @@ impl Router {
             .set_emoji_candidates(config.general.emoji_candidates);
         self.engine
             .set_translation_reading(config.general.translation_reading);
+        self.engine
+            .set_english_prediction(config.general.english_prediction);
         let previous = self.config.render_settings();
         self.config = RouterConfig::from(config);
         let settings = self.config.render_settings();

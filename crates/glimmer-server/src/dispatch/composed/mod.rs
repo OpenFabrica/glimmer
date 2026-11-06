@@ -141,13 +141,16 @@ impl Router {
         Some(self.engine.commit(&candidate))
     }
 
-    /// 按当前状态生成一帧：翻译评审优先；没在组句给空帧；否则给高亮所在的那一页。
+    /// 按当前状态生成一帧：翻译评审优先；没在组句时有英文预测给预测帧、否则空帧；在组句给高亮所在的那一页。
     pub(super) fn current_frame(&self) -> Frame {
         if let Some(translation) = &self.translation {
             return self.translation_frame(translation);
         }
         match &self.composed {
-            None => Frame::default(),
+            None => self
+                .english_next
+                .as_ref()
+                .map_or_else(Frame::default, |list| self.english_prediction_frame(list)),
             Some(Composed::Raw { text, cursor }) => Frame {
                 preedit: vec![PreeditSegment {
                     text: text.clone(),

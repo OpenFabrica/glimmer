@@ -2,13 +2,14 @@
 //! 产出回给客户端的 [`ServerMessage`]。下文说的「DLL」泛指客户端。
 //! 消息分派在 [`message`]，会话在 [`session`]，组句展示状态在 [`composed`]，按键在 [`key`]，
 //! 候选窗口输出在 [`candidates`]，状态条在 [`status`]，翻译选中文字在 [`translate`]，配置热加载在 [`reload`]，
-//! 本地整句模型在 [`rescore`]。
+//! 本地整句模型在 [`rescore`]，英文下一词预测的显示态在 [`next_word`]。
 
 mod candidates;
 mod composed;
 mod config;
 mod key;
 mod message;
+mod next_word;
 mod reload;
 mod rescore;
 mod session;
@@ -19,13 +20,14 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use glimmer_core::Engine;
+use glimmer_core::{CandidateList, Engine};
 use glimmer_platform::LocalModelConfig;
 use glimmer_platform::protocol::{ClientMessage, Frame, ScreenRect, ServerMessage, SessionId};
 
 pub use self::candidates::{CandidateSink, NoopSink, RenderSettings};
 use self::composed::Composed;
 pub use self::config::RouterConfig;
+pub use self::next_word::{NEXT_WORD_LABEL, is_next_word_frame, next_word_label};
 use self::reload::ConfigReload;
 pub use self::reload::attach_cloud;
 pub use self::rescore::find_model;
@@ -56,6 +58,9 @@ pub struct Router {
 
     /// 「翻译选中文字」进行态；与 `composed` 互斥。
     translation: Option<Translation>,
+
+    /// 正在显示的英文下一词预测（组句为空时才有）；`None` 是没显示。只在按键之后取，轮询只看它过没过期。
+    english_next: Option<CandidateList>,
 
     /// 已发出、等 DLL 回选区的请求号；对不上的 `Selection` 丢弃。
     pending_selection: Option<u64>,
@@ -129,6 +134,7 @@ impl Router {
             focused: None,
             composed: None,
             translation: None,
+            english_next: None,
             pending_selection: None,
             selection_seq: 0,
             sentence: None,

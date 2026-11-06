@@ -8,8 +8,9 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use glimmer_core::{EmojiTable, Engine, Language};
-use glimmer_dictionary::{Dictionary, WordList};
+use glimmer_dictionary::{Dictionary, Misspellings, WordList};
 use glimmer_learning::{FrequencyLearner, InputLog, UsageStats, VocabularyBook};
+use glimmer_lm::NgramModel;
 use glimmer_platform::{Config, extra_dictionaries};
 use glimmer_translate::{Glossary, LayeredTranslator, LevelTable, PersonalGlossary};
 
@@ -75,6 +76,7 @@ pub fn assemble(spec: &AssemblySpec) -> Result<Engine, ServerError> {
         tracing::info!(words = words.len(), "英文词表已加载");
         engine = engine.with_english(words);
     }
+    engine = attach_english_extras(engine, spec);
     if let Some(table) = load_emoji(&spec.emoji) {
         tracing::info!(words = table.len(), "emoji 表已加载");
         engine = engine.with_emoji(table);
@@ -92,6 +94,40 @@ pub fn assemble(spec: &AssemblySpec) -> Result<Engine, ServerError> {
     }
     engine.set_wubi(wubi);
     Ok(engine)
+}
+
+/// 英文语言模型与误拼表：都是可选的，读不了只记 warn 跳过（英文候选按词频排、少一档纠错），不影响中文。
+fn attach_english_extras(mut engine: Engine, spec: &AssemblySpec) -> Engine {
+    if let Some(path) = &spec.english_lm {
+        let started = Instant::now();
+        match NgramModel::from_path(path) {
+            Ok(model) => {
+                tracing::info!(
+                    words = model.word_count(),
+                    bigrams = model.bigram_count(),
+                    trigrams = model.trigram_count(),
+                    load_ms = started.elapsed().as_millis(),
+                    "英文语言模型已加载"
+                );
+                engine = engine.with_english_lm(Box::new(model));
+            }
+            Err(error) => {
+                tracing::warn!(%error, path = %path.display(), "英文语言模型加载失败，英文候选按词频排")
+            }
+        }
+    }
+    if let Some(path) = &spec.english_misspellings {
+        match Misspellings::from_path(path) {
+            Ok(table) => {
+                tracing::info!(pairs = table.len(), "英文误拼表已加载");
+                engine = engine.with_english_misspellings(table);
+            }
+            Err(error) => {
+                tracing::warn!(%error, path = %path.display(), "英文误拼表加载失败，跳过")
+            }
+        }
+    }
+    engine
 }
 
 /// 五笔码表所在目录：与主词库同目录（`data/generated/`）。

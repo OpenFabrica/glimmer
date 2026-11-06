@@ -19,6 +19,12 @@ pub struct AssemblySpec {
     /// 英文词表。
     pub english: Option<PathBuf>,
 
+    /// 英文语言模型（`lm-en.qj`）；没有就英文候选按词频排。
+    pub english_lm: Option<PathBuf>,
+
+    /// 英文误拼表（`english-misspellings.tsv`）；没有就少最便宜的那一档纠错。
+    pub english_misspellings: Option<PathBuf>,
+
     /// emoji 表（多张合成一张）。
     pub emoji: Vec<PathBuf>,
 
@@ -51,6 +57,8 @@ impl AssemblySpec {
             glossary: None,
             english_glossary: None,
             english: None,
+            english_lm: None,
+            english_misspellings: None,
             emoji: Vec::new(),
             language_model: None,
             bundled_dicts_dir: None,

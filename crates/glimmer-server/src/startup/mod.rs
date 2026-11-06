@@ -36,6 +36,8 @@ pub fn build_router(paths: &StartupPaths, config: &Config) -> Result<Router, Ser
         glossary: glossary.clone(),
         english_glossary: glossary_file(root, Language::Chinese),
         english: generated(root, "english.tsv"),
+        english_lm: generated(root, "lm-en.qj"),
+        english_misspellings: generated(root, "english-misspellings.tsv"),
         emoji: ["emoji-zh.tsv", "emoji-en.tsv"]
             .into_iter()
             .filter_map(|name| asset(root, &format!("emoji/{name}")))
@@ -65,6 +67,7 @@ pub fn build_router(paths: &StartupPaths, config: &Config) -> Result<Router, Ser
     engine.set_mixed_english(config.general.mixed_english_candidates);
     engine.set_emoji_candidates(config.general.emoji_candidates);
     engine.set_translation_reading(config.general.translation_reading);
+    engine.set_english_prediction(config.general.english_prediction);
     engine.log_session(paths.version, paths.platform);
     dispatch::attach_cloud(&mut engine, &config.predict);
     let router_config = RouterConfig::from(config);
