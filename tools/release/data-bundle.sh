@@ -41,11 +41,12 @@ for f in data/generated/dicts/*.qj; do [[ -f "$f" ]] && DOMAIN_FILES+=("dicts/$(
 [[ -f data/model/model.safetensors ]] && tools/release/pack-model.sh
 
 rm -rf "$OUT" && mkdir -p "$OUT"
-tar -czf "$OUT/glimmer-data.tar.gz" -C data/generated "${PRODUCT_FILES[@]}" "${DOMAIN_FILES[@]}"
+# -h 跟随符号链接打内容：worktree 里 data/generated 的大文件常是指向主工作树的链接，不加会把链接本身打进包
+tar -czhf "$OUT/glimmer-data.tar.gz" -C data/generated "${PRODUCT_FILES[@]}" "${DOMAIN_FILES[@]}"
 cp "$MODEL_FILE" "$OUT/model.qjm"
 present=()
 for f in "${LLM_FILES[@]}"; do [[ -f "data/generated/$f" ]] && present+=("$f"); done
-[[ ${#present[@]} -gt 0 ]] && tar -czf "$OUT/glimmer-llm-intermediates.tar.gz" -C data/generated "${present[@]}"
+[[ ${#present[@]} -gt 0 ]] && tar -czhf "$OUT/glimmer-llm-intermediates.tar.gz" -C data/generated "${present[@]}"
 (cd "$OUT" && shasum -a 256 ./*.tar.gz ./model.qjm | tee SHA256SUMS)
 du -h "$OUT"/*.tar.gz "$OUT/model.qjm"
 
