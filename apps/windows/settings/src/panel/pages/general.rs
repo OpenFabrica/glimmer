@@ -159,6 +159,14 @@ pub(crate) fn view(settings: &Settings, context: &mut ViewContext<Settings>) -> 
                 .on_toggled(context.callback(Message::EnglishCandidates)),
         ),
         field(
+            "预测下一个词（Tab 接受）",
+            "",
+            ToggleSwitch::new()
+                .is_on(g.english_prediction)
+                .is_enabled(g.english_candidates)
+                .on_toggled(context.callback(Message::EnglishPrediction)),
+        ),
+        field(
             "但在终端和代码编辑器里不给",
             "终端、Windows Terminal、VS Code、Cursor、JetBrains 等，那里的候选窗口会挡住应用自己的补全；名单可在配置文件里改。",
             ToggleSwitch::new()

@@ -1,8 +1,9 @@
 //! 把 TSF 送来的虚拟键码翻成协议的 [`KeyEvent`]，以及「组句中哪些键要吃」的判定。
 
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    GetKeyState, VIRTUAL_KEY, VK_BACK, VK_CAPITAL, VK_CONTROL, VK_ESCAPE, VK_LSHIFT, VK_LWIN,
-    VK_MENU, VK_RETURN, VK_RSHIFT, VK_RWIN, VK_SHIFT, VK_SPACE, VK_TAB,
+    GetKeyState, VIRTUAL_KEY, VK_BACK, VK_CAPITAL, VK_CONTROL, VK_ESCAPE, VK_LCONTROL, VK_LMENU,
+    VK_LSHIFT, VK_LWIN, VK_MENU, VK_RCONTROL, VK_RETURN, VK_RMENU, VK_RSHIFT, VK_RWIN, VK_SHIFT,
+    VK_SPACE, VK_TAB,
 };
 
 use glimmer_platform::protocol::{KeyEvent, KeyModifiers};
@@ -36,6 +37,31 @@ pub(crate) fn is_edit(vk: u32) -> bool {
         VIRTUAL_KEY(vk as u16),
         VK_BACK | VK_TAB | VK_RETURN | VK_ESCAPE | VK_SPACE
     ) || is_digit(vk)
+}
+
+/// 不带任何修饰键的 Tab：英文预测显示着时接受它。与 Router 的判定一致（Shift+Tab 是反向跳焦点，不接受）。
+pub(crate) fn is_plain_tab(event: &KeyEvent) -> bool {
+    event.virtual_key == u32::from(VK_TAB.0) && event.modifiers.chord() == KeyModifiers::default()
+}
+
+/// 单独按下的修饰键（Shift / Ctrl / Alt / Win / Caps Lock）：本身不交给应用任何东西，不收起英文预测
+/// （要按 Shift 敲大写字母、按 Ctrl 再按 C 时，收起交给后面那个键）。
+pub(crate) fn is_modifier(vk: u32) -> bool {
+    matches!(
+        VIRTUAL_KEY(vk as u16),
+        VK_SHIFT
+            | VK_LSHIFT
+            | VK_RSHIFT
+            | VK_CONTROL
+            | VK_LCONTROL
+            | VK_RCONTROL
+            | VK_MENU
+            | VK_LMENU
+            | VK_RMENU
+            | VK_LWIN
+            | VK_RWIN
+            | VK_CAPITAL
+    )
 }
 
 /// PageUp/Down、End、Home、方向键。

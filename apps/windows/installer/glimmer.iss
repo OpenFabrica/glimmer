@@ -82,6 +82,9 @@ Source: "{#Repo}\data\generated\glossary-ja.qj"; DestDir: "{app}\data\generated"
 Source: "{#Repo}\data\generated\glossary-zh.qj"; DestDir: "{app}\data\generated";       Flags: ignoreversion
 Source: "{#Repo}\data\generated\glossary-es.qj"; DestDir: "{app}\data\generated";       Flags: ignoreversion
 Source: "{#Repo}\data\generated\english.tsv";    DestDir: "{app}\data\generated";       Flags: ignoreversion
+; 英文语言模型与误拼表可选：没有就不装，英文候选按词频排、少一档纠错
+Source: "{#Repo}\data\generated\lm-en.qj";       DestDir: "{app}\data\generated";       Flags: ignoreversion skipifsourcedoesntexist
+Source: "{#Repo}\data\generated\english-misspellings.tsv"; DestDir: "{app}\data\generated"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "{#Repo}\data\generated\dicts\*.qj";     DestDir: "{app}\data\generated\dicts";  Flags: ignoreversion
 ; AI 领域词库的署名、来源和许可证。
 Source: "{#Repo}\assets\lexicon\ai\LICENSE.*"; DestDir: "{app}\assets\lexicon\ai"; Flags: ignoreversion

@@ -86,6 +86,7 @@ impl Component for Settings {
             Message::WubiHint(on) => self.save("wubi", "hint", on),
             Message::Traditional(on) => self.save("general", "traditional", on),
             Message::EnglishCandidates(on) => self.save("general", "english_candidates", on),
+            Message::EnglishPrediction(on) => self.save("general", "english_prediction", on),
             Message::ChineseFirst(on) => self.save("general", "chinese_first", on),
             Message::MixedEnglishCandidates(on) => {
                 self.save("general", "mixed_english_candidates", on);

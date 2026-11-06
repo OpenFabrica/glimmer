@@ -1,6 +1,7 @@
 //! `ITfKeyEventSink`：所有键先经 `OnTestKeyDown` 判吃不吃（[`TextService_Impl::would_eat`]，与 Router 的分派对齐），
 //! 吃的键在 `OnKeyDown` 里转发给 Server 并按结果更新文档；单击 Shift 的判定与保留键命中也在这里。
 //! 上下文禁了键盘（密码框，见 [`context`](crate::com::context)）时没在组句的键一律放行。
+//! 显示着英文下一词预测时只多吃一个 Tab；其余键吃不吃与没显示时完全一样，不吃的照常交给应用并通知 Server 收起预测。
 
 use windows::Win32::Foundation::{FALSE, LPARAM, WPARAM};
 use windows::Win32::UI::Input::KeyboardAndMouse::VK_CAPITAL;
@@ -12,8 +13,10 @@ use glimmer_platform::protocol::{KeyEvent, KeyOutcome};
 use super::TextService_Impl;
 use super::next::Next;
 use crate::client::KeyReply;
-use crate::com::composition::preedit_string;
-use crate::com::key::event::{digit_key, is_edit, is_letter, is_mode_letter, is_nav, to_key_event};
+use crate::com::composition::{is_prediction, preedit_string};
+use crate::com::key::event::{
+    digit_key, is_edit, is_letter, is_mode_letter, is_modifier, is_nav, is_plain_tab, to_key_event,
+};
 use crate::com::key::preserved;
 use crate::com::log::log;
 
@@ -32,19 +35,29 @@ impl ITfKeyEventSink_Impl for TextService_Impl {
     }
 
     /// 所有键（含之后被吃掉的）都先经过这里，Shift 单击的判定放在这一层。
+    /// 显示着英文预测时不吃的键在这里就收起预测：不吃的键框架不会再调 `OnKeyDown`。
     fn OnTestKeyDown(&self, pic: Ref<ITfContext>, wparam: WPARAM, lparam: LPARAM) -> Result<BOOL> {
         let vk = wparam.0 as u32;
         self.note_key_down(vk, lparam);
+        self.end_prediction_elsewhere(&pic);
+        let event = self.key_event(vk);
         if self.keyboard_disabled(&pic) {
+            self.end_prediction_for(&event);
             return Ok(FALSE);
         }
-        Ok(self.would_eat(&self.key_event(vk)).into())
+        let eat = self.would_eat(&event);
+        if !eat {
+            self.end_prediction_for(&event);
+        }
+        Ok(eat.into())
     }
 
     fn OnKeyDown(&self, pic: Ref<ITfContext>, wparam: WPARAM, lparam: LPARAM) -> Result<BOOL> {
         let vk = wparam.0 as u32;
         self.note_key_down(vk, lparam);
+        self.end_prediction_elsewhere(&pic);
         if self.keyboard_disabled(&pic) {
+            self.end_prediction_for(&self.key_event(vk));
             return Ok(FALSE);
         }
         let event = self.key_event(vk);
@@ -91,6 +104,26 @@ impl TextService_Impl {
         disabled
     }
 
+    /// 显示着预测时按了一个不吃的键：它原样交给应用，预测要收起（Server 同时作废英文上文）。
+    /// 单独按下的修饰键不算：后面跟的字母 / 组合键自己会收。
+    fn end_prediction_for(&self, event: &KeyEvent) {
+        if self.shared.predicting() && !is_modifier(event.virtual_key) {
+            self.shared.end_prediction();
+        }
+    }
+
+    /// 键来自另一个文档上下文（点进了别的输入框）：预测是上一个输入框的，先收起，免得 Tab 把词插到这里。
+    fn end_prediction_elsewhere(&self, pic: &Ref<ITfContext>) {
+        if !self.shared.predicting() {
+            return;
+        }
+        let same =
+            matches!((pic.ok(), self.shared.last_context()), (Ok(now), Some(last)) if *now == last);
+        if !same {
+            self.shared.end_prediction();
+        }
+    }
+
     fn key_event(&self, vk: u32) -> KeyEvent {
         to_key_event(vk, self.mode_state.english())
     }
@@ -117,6 +150,10 @@ impl TextService_Impl {
         if self.shared.translating() {
             return true;
         }
+        // 英文预测显示着：只多吃不带修饰键的 Tab（接受）；其余键往下照没显示时判
+        if self.shared.predicting() && is_plain_tab(event) {
+            return true;
+        }
         let modifiers = event.modifiers;
         if modifiers.has_command_key() {
             return self.shared.composing() && digit_key(event.virtual_key);
@@ -137,9 +174,10 @@ impl TextService_Impl {
             .is_some_and(|c| c.is_ascii_punctuation() || c.is_ascii_digit())
     }
 
-    /// 不吃的键绝不碰组句（否则光标一移，组句会把拼音重插到别处）。
+    /// 不吃的键绝不碰组句（否则光标一移，组句会把拼音重插到别处）；显示着预测时顺带收起它。
     fn handle_key(&self, pic: Ref<ITfContext>, event: KeyEvent) -> bool {
         if !self.would_eat(&event) {
+            self.end_prediction_for(&event);
             return false;
         }
         self.forward_key(pic, event)
@@ -177,7 +215,11 @@ impl TextService_Impl {
                     } else {
                         String::new()
                     };
-                    self.shared.set_composing(!response.frame.is_empty());
+                    // 英文预测帧不算组句：不开 TSF 组句，功能键照没在组句时放行
+                    let predicting = is_prediction(&response.frame);
+                    self.shared
+                        .set_composing(!response.frame.is_empty() && !predicting);
+                    self.shared.set_predicting(predicting);
                     // 翻译评审的任何键都结束评审（Server 侧已同步结束）。
                     self.shared.set_translating(false);
                     let consumed = matches!(response.outcome, KeyOutcome::Consumed);
@@ -201,6 +243,8 @@ impl TextService_Impl {
                 }
                 Ok(KeyReply::NeedSelection { request }) => {
                     log(&format!("翻译选中文字：Server 请读选区 request={request}"));
+                    // Server 进翻译前已收起英文预测
+                    self.shared.set_predicting(false);
                     Next::ReadSelection { request }
                 }
                 Err(error) => {

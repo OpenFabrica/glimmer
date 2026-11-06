@@ -21,6 +21,8 @@ pub(crate) enum Message {
     WubiHint(bool),
     Traditional(bool),
     EnglishCandidates(bool),
+    /// `[general] english_prediction`：英文模式词后敲空格预测下一个词，Tab 接受。
+    EnglishPrediction(bool),
     ChineseFirst(bool),
     /// `[general] mixed_english_candidates`：中文模式下给英文词候选。
     MixedEnglishCandidates(bool),

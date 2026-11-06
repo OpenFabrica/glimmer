@@ -14,6 +14,7 @@ use windows::Win32::UI::TextServices::{
 };
 use windows::core::{Interface, Result};
 
+use glimmer_core::CandidateKind;
 use glimmer_platform::protocol::{Frame, PreeditKind};
 
 pub(crate) use self::shared::Shared;
@@ -29,6 +30,19 @@ pub(crate) fn preedit_string(frame: &Frame) -> String {
         .filter(|segment| segment.kind != PreeditKind::Corrected)
         .map(|segment| segment.text.as_str())
         .collect()
+}
+
+/// 英文下一词预测帧：没有拼音行、候选全是英文词，与 Server 的 `is_next_word_frame` 同一判定
+/// （DLL 不能带 Server 的依赖树，这里抄一份）。翻译评审的译文是云端样式，不算。
+/// 预测不开 TSF 组句，应用里不留任何痕迹；候选窗跟着插入点。
+pub(crate) fn is_prediction(frame: &Frame) -> bool {
+    frame.preedit.is_empty()
+        && !frame.candidates.items.is_empty()
+        && frame
+            .candidates
+            .items
+            .iter()
+            .all(|candidate| candidate.kind == CandidateKind::English)
 }
 
 /// 在编辑会话回调（持写锁 `ec`）里调：先落定 `commit`，再按 `preedit` 起 / 改 / 收组句，最后把光标位置报给 Server。
@@ -89,7 +103,7 @@ fn report_surrounding(engine: &SharedClient, before: String) {
     }
 }
 
-/// 组句进行中才报位置；组句已收 Server 会按空帧 / `Commit` 自行收窗口。
+/// 组句进行中或显示着英文预测才报位置；都没有时 Server 会按空帧 / `Commit` 自行收窗口。
 fn report_caret(shared: &Shared, engine: &SharedClient, context: &ITfContext, ec: u32) {
     let rect = match shared.composition() {
         Some(composition) => {
@@ -98,8 +112,8 @@ fn report_caret(shared: &Shared, engine: &SharedClient, context: &ITfContext, ec
             };
             anchor_rect(context, ec, &range)
         }
-        // 「只在候选窗口」模式应用里不放行内拼音：没有组句范围可量，量插入点。
-        None if shared.composing() => caret_rect(context, ec),
+        // 「只在候选窗口」模式应用里不放行内拼音、英文预测不开组句：没有组句范围可量，量插入点。
+        None if shared.composing() || shared.predicting() => caret_rect(context, ec),
         None => return,
     };
     // 引擎正被别处借着（罕见）就跳过这拍，Server 保持上次位置。

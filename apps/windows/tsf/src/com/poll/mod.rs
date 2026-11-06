@@ -1,4 +1,4 @@
-//! 轮询定时器：组句期间每隔一小段时间向 Server 拉一次异步结果（云端候选 / 整句补全）；
+//! 轮询定时器：组句期间每隔一小段时间向 Server 拉一次异步结果（云端候选 / 整句补全），显示着英文预测时靠它发现过期；
 //! 没在组句、本线程在前台时，隔几拍问一次状态条上有没有点出切模式的请求（中英模式在 DLL 侧，Server 只能等我们来取）。
 //! 云端结果几百毫秒后才回，那时往往没有新按键来「顺手收一次」，所以在 TSF 线程上挂一个 `WM_TIMER`；
 //! 传输仍是一问一答。定时器挂在隐藏的消息窗口上，与按键同在 STA 消息泵上跑。回调上下文在 [`context`]。
@@ -108,10 +108,11 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
     unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
 }
 
-/// 组句中或翻译评审中拉云结果；否则前台时隔几拍问一次切模式。引擎正被按键处理借用时跳过这一拍；连接坏了断开。
+/// 组句中、翻译评审中或显示着英文预测时拉一次；否则前台时隔几拍问一次切模式。引擎正被按键处理借用时跳过这一拍；连接坏了断开。
 fn poll_once(context: &PollContext) {
     let translating = context.shared.translating();
-    if !context.shared.composing() && !translating {
+    let predicting = context.shared.predicting();
+    if !context.shared.composing() && !translating && !predicting {
         let tick = context.ticks.get().wrapping_add(1);
         context.ticks.set(tick);
         if context.shared.foreground() && tick.is_multiple_of(MODE_SYNC_EVERY) {
@@ -132,6 +133,9 @@ fn poll_once(context: &PollContext) {
                 drop(guard);
                 context.shared.set_translating(false);
                 context.shared.hide_candidates();
+            } else if predicting && frame.is_empty() {
+                // 预测过期了：Server 已收窗口，本地只清标志（Tab 不再吃）
+                context.shared.set_predicting(false);
             }
         }
         Err(error) => {

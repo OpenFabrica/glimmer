@@ -10,12 +10,16 @@ pub(crate) struct Shared {
     /// 当前活动的组句，跨按键存活。
     composition: RefCell<Option<ITfComposition>>,
 
-    /// Server 上次回的帧非空；决定 `OnTestKeyDown` 要不要吃功能键。
+    /// Server 上次回的帧非空且不是英文预测；决定 `OnTestKeyDown` 要不要吃功能键。
     composing: Cell<bool>,
 
     /// 这一段的输入框状态（私密与否、光标前文）已经报给 Server 了。
     /// 行内模式下靠「组句刚起」判断，`preedit = window` 模式应用里没有组句，得另记一个标记。
     context_reported: Cell<bool>,
+
+    /// 显示着英文下一词预测（Server 上次回的帧没有拼音行、只有候选）：不算组句，只多吃一个 Tab；
+    /// 其余不吃的键照常放行，并通知 Server 收起；轮询定时器照常跑（过期要靠它收起）。
+    predicting: Cell<bool>,
 
     /// 「翻译选中文字」评审进行中：所有键交给 Server 定接受 / 取消，轮询定时器照常拉云端译文。
     translating: Cell<bool>,
@@ -39,6 +43,7 @@ impl Shared {
             composition: RefCell::new(None),
             composing: Cell::new(false),
             context_reported: Cell::new(false),
+            predicting: Cell::new(false),
             translating: Cell::new(false),
             last_context: RefCell::new(None),
             server_stale: Cell::new(false),
@@ -87,6 +92,23 @@ impl Shared {
         self.context_reported.set(value);
     }
 
+    /// 显示着英文预测。
+    pub(crate) fn predicting(&self) -> bool {
+        self.predicting.get()
+    }
+
+    /// 按 Server 回的帧记下显示没显示英文预测（只改本地标志，不通知 Server）。
+    pub(crate) fn set_predicting(&self, value: bool) {
+        self.predicting.set(value);
+    }
+
+    /// 显示着预测时收起它：本地清标志并通知 Server（Server 收窗口、作废英文上文）。没在显示时什么都不做。
+    pub(crate) fn end_prediction(&self) {
+        if self.predicting.replace(false) {
+            self.hide_candidates();
+        }
+    }
+
     pub(crate) fn translating(&self) -> bool {
         self.translating.get()
     }
@@ -121,9 +143,10 @@ impl Shared {
         self.composition.borrow_mut().take()
     }
 
-    /// 组句结束（应用终止组句 / 断线 / 失焦上屏）：不再当作在组句，并让 Server 收候选窗口。
+    /// 组句结束（应用终止组句 / 断线 / 失焦上屏）：不再当作在组句或显示预测，并让 Server 收候选窗口。
     pub(crate) fn end_composing(&self) {
         self.composing.set(false);
+        self.predicting.set(false);
         self.translating.set(false);
         self.hide_candidates();
     }

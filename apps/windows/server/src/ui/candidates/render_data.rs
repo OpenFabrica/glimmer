@@ -5,6 +5,7 @@ use std::rc::Rc;
 use glimmer_platform::protocol::{Frame, PreeditKind};
 use glimmer_platform::{LayoutMode, ThemeMode};
 use glimmer_render::{Preedit, PreeditSegment, PreeditStyle, Row};
+use glimmer_server::dispatch::{is_next_word_frame, next_word_label};
 
 use super::row;
 use super::theme::Theme;
@@ -58,17 +59,25 @@ impl RenderData {
         }
     }
 
+    /// 按帧换算出这次要画的内容。英文下一词预测只有 Tab 能接：第一行序号换成 ⇥、其余不标，免得用户去按数字。
     pub(super) fn set(&mut self, frame: &Frame) {
         self.layout = frame.layout;
         self.theme_mode = frame.theme;
         self.preedit = window_preedit(frame);
         self.cursor = frame.cursor;
+        let next_word = is_next_word_frame(frame);
         self.rows = frame
             .candidates
             .items
             .iter()
             .enumerate()
-            .map(|(i, candidate)| row::from_candidate(i, candidate))
+            .map(|(i, candidate)| {
+                let mut row = row::from_candidate(i, candidate);
+                if next_word {
+                    row.index = next_word_label(i).to_owned();
+                }
+                row
+            })
             .collect();
         self.highlight = frame.highlight;
         self.footer =
