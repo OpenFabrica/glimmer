@@ -91,6 +91,7 @@ impl Engine {
                 })
             }
             InputSource::English
+            | InputSource::EnglishPrediction
             | InputSource::Custom
             | InputSource::Shortcut
             | InputSource::Emoji

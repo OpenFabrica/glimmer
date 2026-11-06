@@ -261,6 +261,11 @@ impl Engine {
         };
         self.punctuation.note_committed(&candidate.text);
         self.history.record(&candidate.text);
+        if candidate.kind == CandidateKind::English {
+            self.note_english_word(&candidate.text);
+        } else {
+            self.note_other_commit();
+        }
         let learned = matches!(
             candidate.kind,
             CandidateKind::Chinese | CandidateKind::Cloud | CandidateKind::Sentence

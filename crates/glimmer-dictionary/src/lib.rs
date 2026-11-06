@@ -23,4 +23,6 @@ pub use dictionary::Dictionary;
 pub use error::DictionaryError;
 pub use matching::Match;
 pub use pattern::{SyllablePattern, canonical_syllable};
-pub use word_list::{WordList, valid_alias_code};
+pub use word_list::{
+    Misspellings, SHORT_PREFIX_TOP, WordEntry, WordList, english_code, valid_alias_code,
+};

@@ -186,8 +186,9 @@ fn english_completions_appear_when_pinyin_is_unlikely() {
 
 #[test]
 fn english_mode_suggests_from_the_word_list_and_keeps_the_typed_text() {
+    // 词频是 Zipf × 1000，与随包词表同一单位
     let words = WordList::parse(
-        "company\tcompany\t900\ncompare\tcompare\t500\nhello\thello\t1000\nhelp\thelp\t700\n",
+        "company\tcompany\t5900\ncompare\tcompare\t5500\nhello\thello\t5600\nhelp\thelp\t5400\n",
     )
     .unwrap();
     let submitted = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
@@ -215,22 +216,22 @@ fn english_mode_suggests_from_the_word_list_and_keeps_the_typed_text() {
     engine.set_input("comp");
     assert_eq!(engine.request_prediction(None, &[]), None);
     assert!(submitted.borrow().is_empty());
-    // 选中的词记次数，下次同样的前缀它靠前
+    // 选中一次不改排序：个人词只选过一次份额是 0（误选一次不起作用），选第二次起才算
     let compare = engine.query().unwrap().candidates.items[1].clone();
     assert_eq!(engine.commit(&compare), "compare");
     assert!(engine.composition().is_empty());
     engine.set_input("comp");
-    assert_eq!(texts_of(&engine), ["compare", "company"]);
-    // 拼错一个字母也有候选；回车原样上屏敲的字母
+    assert_eq!(texts_of(&engine), ["company", "compare"]);
+    // 拼错一个字母也有候选（敲的串没有补全，它本身作为原样读法排在纠错后面）；回车原样上屏敲的字母
     engine.set_input("helo");
-    assert_eq!(texts_of(&engine), ["hello", "help"]);
+    assert_eq!(texts_of(&engine), ["hello", "help", "helo"]);
     assert_eq!(engine.take_raw(), "helo");
     // emoji 排在所有词后面，不挡上下键选词
     let table = EmojiTable::parse("help\t🆘\n").unwrap();
     let mut engine = engine.with_emoji(table);
     engine.set_english_mode(true);
     engine.set_input("helo");
-    assert_eq!(texts_of(&engine), ["hello", "help", "🆘"]);
+    assert_eq!(texts_of(&engine), ["hello", "help", "helo", "🆘"]);
     // 离开英文模式后同一串又按拼音算
     engine.set_english_mode(false);
     engine.set_input("comp");
@@ -386,6 +387,50 @@ fn pinyin_like_english_tail_competes_with_the_plain_reading() {
     assert!(engine.composition().is_empty());
 }
 
+/// 中文模式打不出大写（Shift + 字母先上屏拼音），只出一个英文词的三条路都用缺省写法（同码第一个）：
+/// 混输的整段英文词（`api` → API、`may` → may、`dickens` → Dickens）、`v` 开头的表达式模式（`vikings` → Vikings）、
+/// 句末英文词（`wodedatabase`）。两个字母的尾段只认缩写词，同码有几个写法时按缺省写法判断：缺省是 ID 的 `kaifaid` 切出开发ID，
+/// 缺省是 id 的不切。
+#[test]
+fn chinese_mode_english_words_use_the_default_spelling() {
+    const DICT: &str = "我\two\t900000\n的\tde\t800000\n我的\two de\t500000\n大\tda\t50000\n塔\tta\t3000\n巴\tba\t3000\n瑟\tse\t500\n";
+    let engine_with = |words: &str| {
+        Engine::new(Dictionary::parse(DICT).unwrap()).with_english(WordList::parse(words).unwrap())
+    };
+    let mut engine = engine_with(
+        "API\tapi\t5000\nmay\tmay\t5980\nMay\tmay\t4980\nDickens\tdickens\t3900\ndickens\tdickens\t3900\n\
+         Vikings\tvikings\t3900\nvikings\tvikings\t3900\ndatabase\tdatabase\t4310\nDatabase\tdatabase\t3310\n",
+    );
+    for (typed, shown, hidden) in [
+        ("api", "API", "api"),
+        ("may", "may", "May"),
+        ("dickens", "Dickens", "dickens"),
+        ("vikings", "Vikings", "vikings"),
+    ] {
+        engine.set_input(typed);
+        let texts = texts_of(&engine);
+        assert!(texts.contains(&shown.to_owned()), "{typed}: {texts:?}");
+        assert!(!texts.contains(&hidden.to_owned()), "{typed}: {texts:?}");
+    }
+    engine.set_input("wodedatabase");
+    assert_eq!(texts_of(&engine)[0], "我的database");
+    let mut engine =
+        super::engine().with_english(WordList::parse("ID\tid\t4610\nid\tid\t4610\n").unwrap());
+    engine.set_input("kaifaid");
+    assert_eq!(texts_of(&engine)[0], "开发ID");
+    // 同码的 id 与 ID 换个先后：缺省写法是小写，两个字母的尾段不是缩写词，不切
+    let mut engine =
+        super::engine().with_english(WordList::parse("id\tid\t4610\nID\tid\t3610\n").unwrap());
+    engine.set_input("kaifaid");
+    let texts = texts_of(&engine);
+    assert!(
+        texts
+            .iter()
+            .all(|t| !t.ends_with("ID") && !t.ends_with("id")),
+        "{texts:?}"
+    );
+}
+
 #[test]
 fn domain_english_names_follow_dictionary_switch_and_keep_main_words() {
     let mut e = engine().with_english(WordList::parse("Claude\tclaude\n").unwrap());
@@ -491,4 +536,28 @@ fn mixed_english_candidates_can_be_switched_off_in_chinese_mode() {
     engine.set_mixed_english(true);
     engine.set_input("hello");
     assert_eq!(engine.query().unwrap().candidates.items[0].text, "hello");
+}
+
+#[test]
+fn typing_past_a_dead_english_prefix_skips_the_search_and_backspace_recovers() {
+    let words = WordList::parse("qwerty\tqwerty\t3500\nquery\tquery\t4500\n").unwrap();
+    let mut engine = engine().with_english(words);
+    engine.set_english_mode(true);
+    for c in "qwertyuiopas".chars() {
+        engine.push(c);
+    }
+    assert!(texts_of(&engine).is_empty());
+    assert!(engine.english_dead.is_empty("qwertyuiopas"));
+    engine.push('d');
+    assert!(texts_of(&engine).is_empty());
+    // 退格回到有候选的地方：不在已知的死前缀之下，照常查
+    for _ in 0..7 {
+        engine.backspace();
+    }
+    assert_eq!(engine.composition().text(), "qwerty");
+    assert_eq!(texts_of(&engine)[0], "qwerty");
+    // 新一段组句清掉记录
+    engine.clear();
+    engine.push('q');
+    assert!(!engine.english_dead.is_empty("qwertyuiopasd"));
 }

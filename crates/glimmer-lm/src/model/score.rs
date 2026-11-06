@@ -1,5 +1,6 @@
 //! 打分：三元 → 二元 → 一元的回退。
 
+use glimmer_core::english::NgramHistory;
 use glimmer_core::sentence::{Context, LanguageModel};
 
 use crate::smoothing::BackoffMode;
@@ -14,6 +15,20 @@ impl LanguageModel for NgramModel {
             _ => self.backoff_probability(context, id),
         };
         Some(probability.max(f64::MIN_POSITIVE).ln())
+    }
+
+    /// 上文的量只求一次，见 `batch.rs`。
+    fn log_probs(&self, history: NgramHistory<'_>, words: &[&str]) -> Vec<Option<f64>> {
+        self.batch_log_probs(history, words)
+    }
+
+    /// 扫上文那一层的后继段，见 `batch.rs`。
+    fn successors(
+        &self,
+        history: NgramHistory<'_>,
+        keep: &mut dyn FnMut(&str) -> bool,
+    ) -> Vec<(String, u32)> {
+        self.listed_successors(history, keep)
     }
 }
 
@@ -40,7 +55,7 @@ impl NgramModel {
 
     /// 一元：缺省是 c(w)/N，[`BackoffMode::Continuation`] 换成接续概率 N₁₊(·,w)/N₁₊(·,·)。
     /// 接续计数加一再算：剪枝后的表里有些词（短语层合成进来的 token）一次也没当过后词，不能给它概率 0。
-    fn unigram_probability(&self, word: u32) -> f64 {
+    pub(super) fn unigram_probability(&self, word: u32) -> f64 {
         if self.smoothing.mode == BackoffMode::Continuation {
             let continuations = f64::from(self.continuations[word as usize]) + 1.0;
             return continuations / (self.continuation_total + self.entries.len() as f64);
@@ -98,7 +113,7 @@ impl NgramModel {
     }
 
     /// 改成三元之前的打分：固定 λ 的插值，只看前一个词。
-    fn legacy_probability(&self, context: Context<'_>, word: u32) -> f64 {
+    pub(super) fn legacy_probability(&self, context: Context<'_>, word: u32) -> f64 {
         let unigram = f64::from(self.entries[word as usize].count) / self.total;
         match self.context_id(context.previous) {
             Some(previous) if self.entries[previous as usize].count > 0 => {
@@ -114,7 +129,7 @@ impl NgramModel {
     }
 
     /// 前一个词的编号；句首用句首标记。模型不认识这个词时返回 `None`（只能退到一元）。
-    fn context_id(&self, previous: Option<&str>) -> Option<u32> {
+    pub(super) fn context_id(&self, previous: Option<&str>) -> Option<u32> {
         match previous {
             None => self.start,
             Some(text) => self.word_id(text),
@@ -123,7 +138,7 @@ impl NgramModel {
 
     /// 再前一个词的编号：前一个词在句首（或调用方只知道一个词）时用句首标记，
     /// 与语料统计时每句前面加 `<s>` 的做法对齐；这个词本身在句首时没有前二词。
-    fn earlier_id(&self, context: Context<'_>) -> Option<u32> {
+    pub(super) fn earlier_id(&self, context: Context<'_>) -> Option<u32> {
         context.previous?;
         match context.earlier {
             None => self.start,
@@ -136,7 +151,14 @@ impl NgramModel {
 /// `total` 是上文自己的计数，`discount` 是绝对折扣 D，`lower` 是下一层的概率。
 ///
 /// 每条见过的接续让出 D 份，让出去的与没分配的（剪枝砍掉的、语料里根本没接过的）合起来按 `lower` 分。
-fn mix(count: f64, sum: f64, distinct: f64, total: f64, discount: f64, lower: f64) -> f64 {
+pub(super) fn mix(
+    count: f64,
+    sum: f64,
+    distinct: f64,
+    total: f64,
+    discount: f64,
+    lower: f64,
+) -> f64 {
     let seen = (count - discount).max(0.0) / total;
     let taken = ((sum - discount * distinct).max(0.0) / total).clamp(0.0, 1.0);
     seen + (1.0 - taken) * lower

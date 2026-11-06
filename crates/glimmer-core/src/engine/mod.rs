@@ -9,12 +9,14 @@ mod commit;
 mod composing;
 mod correcting;
 mod decoded;
+mod english_context;
 mod extras;
 mod gloss;
 mod input_log;
 mod learning;
 mod marked;
 mod mode_keys;
+mod next_word;
 mod prediction;
 mod privacy;
 mod punctuation_mode;
@@ -31,11 +33,12 @@ mod vocabulary;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use glimmer_dictionary::{Dictionary, Match, WordList};
+use glimmer_dictionary::{Dictionary, Match, Misspellings, WordList};
 
 pub use alignment::Alignment;
 pub use annotation::AnnotationReport;
 pub use commit::{LastCommit, Transition};
+pub use english_context::{ENGLISH_CONTEXT_TIMEOUT, EnglishContext};
 pub use gloss::{FilledGloss, GlossFiller, NoGlossFiller};
 pub use input_log::{
     CommitEntry, INPUT_LOG_VERSION, InputLogEntry, InputLogger, InputSource, LOGGED_CANDIDATES,
@@ -113,6 +116,34 @@ pub struct Engine {
 
     /// 英文模式（壳里 Caps Lock 亮着）：缓冲区里的字母不当拼音，候选来自英文词表的补全与纠正。
     english_mode: bool,
+
+    /// 英文语言模型（token 是小写、留撇号的词），英文候选按上文打分；没有就按词频（正常降级）。
+    english_lm: Option<Box<dyn LanguageModel>>,
+
+    /// 英文误拼表（`recieve` → receive），敲错纠正里最便宜的一档；没有就少这一路。
+    english_misspellings: Option<Misspellings>,
+
+    /// 英文候选打分的常数；只有评测调参会改（`set_english_score`）。
+    english_score: english::ScoreParams,
+
+    /// 英文上文：前两个英文词，随会话交换（见 [`english_context`]）。
+    english_context: EnglishContext,
+
+    /// 英文上文的后继缓存：敲一个词的过程中上文不变，第一键扫一次模型的后继段（见 [`english::SuccessorCache`]）。
+    english_successors: std::cell::RefCell<english::SuccessorCache>,
+
+    /// 英文模式下词后敲空格就预测下一个词（配置 `[general] english_prediction`，缺省开）。
+    english_prediction: bool,
+
+    /// 下一词预测的常数；只有评测调参会改（`set_english_predict_params`）。
+    english_predict: english::PredictParams,
+
+    /// 最近一个英文上文的下一词预测：壳在轮询里反复问，上文不变就不重扫后继（见 [`english::PredictionCache`]）。
+    english_predictions: std::cell::RefCell<english::PredictionCache>,
+
+    /// 这段组句里已知走不通的英文编码（一个候选都没有、纠错变体都没有，见 [`english::DeadEnds`]）：
+    /// 长串乱敲时每键都要试两处编辑，记下它后面的键直接跳过。新一段组句、换词库时清掉。
+    english_dead: english::DeadEnds,
 
     /// 全角标点与引号配对状态。
     punctuation: Punctuation,
@@ -390,6 +421,15 @@ impl Engine {
             english: None,
             extra_english: WordList::default(),
             english_mode: false,
+            english_lm: None,
+            english_misspellings: None,
+            english_score: english::ScoreParams::DEFAULT,
+            english_context: EnglishContext::default(),
+            english_successors: std::cell::RefCell::new(english::SuccessorCache::default()),
+            english_dead: english::DeadEnds::default(),
+            english_prediction: true,
+            english_predict: english::PredictParams::DEFAULT,
+            english_predictions: std::cell::RefCell::new(english::PredictionCache::default()),
             punctuation: Punctuation::default(),
             full_width_punctuation: true,
             punctuation_mode: PunctuationMode::default(),

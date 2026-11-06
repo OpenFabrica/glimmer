@@ -411,25 +411,53 @@ impl Engine {
         }
     }
 
-    /// 英文模式：敲的字母原样显示，候选是英文词表的精确词、前缀补全与拼错纠正（见 [`english::suggest`]），
+    /// 英文模式：敲的字母原样显示，候选是英文词表的补全、敲错纠正与个人词按上文统一打分排出来的（见 [`english::suggest`]），
     /// 词表没装就没有候选。emoji 照配，但排在所有词后面：选词靠上下键，emoji 夹在词中间会挡路。
     pub(super) fn query_english(&self, scope: &str, rest: String, start: Instant) -> Query {
-        let mut items: Vec<Candidate> = english::suggest_with_domain(
-            &self.english_lists(),
-            (!self.extra_english.is_empty()).then_some(&self.extra_english),
-            scope,
-            |text| self.learner.weight(text),
-            ENGLISH_MODE_CANDIDATES,
-        )
-        .into_iter()
-        .map(|text| Candidate {
-            text,
-            kind: CandidateKind::English,
-            syllables: Vec::new(),
-            reading: None,
-            translation: None,
-        })
-        .collect();
+        let history = self.english_context.history();
+        let code = glimmer_dictionary::english_code(scope);
+        let dead = self.english_dead.is_empty(&code);
+        let model = self.english_lm.as_deref();
+        // 上文的后继：第一键扫一次模型的后继段，同一个上文、同一个首字母下后面每一键复用
+        if let Some(model) = model.filter(|_| !dead) {
+            self.english_successors
+                .borrow_mut()
+                .prepare(model, history, &code);
+        }
+        let successors = self.english_successors.borrow();
+        let sources = english::Sources {
+            main: self.english.as_ref(),
+            personal: self.learner.user_english(),
+            domain: (!self.extra_english.is_empty()).then_some(&self.extra_english),
+            misspellings: self.english_misspellings.as_ref(),
+            model,
+            history,
+            successors: model.is_some().then_some(&*successors),
+            dead_ends: Some(&self.english_dead),
+        };
+        let words = if dead {
+            Vec::new()
+        } else {
+            english::suggest(
+                &sources,
+                scope,
+                &self.english_score,
+                ENGLISH_MODE_CANDIDATES,
+            )
+        };
+        if words.is_empty() && !dead && english::stays_empty(&code) {
+            self.english_dead.mark_empty(&code);
+        }
+        let mut items: Vec<Candidate> = words
+            .into_iter()
+            .map(|text| Candidate {
+                text,
+                kind: CandidateKind::English,
+                syllables: Vec::new(),
+                reading: None,
+                translation: None,
+            })
+            .collect();
         self.insert_emoji(&mut items);
         items.sort_by_key(|c| c.kind == CandidateKind::Emoji);
         Query {

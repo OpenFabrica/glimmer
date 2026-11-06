@@ -1,7 +1,7 @@
 //! 可挂起的会话输入状态；词库与用户学习服务仍由同一个 Engine 持有。
 
 use super::commit::CommitChain;
-use super::{Engine, LastCommit, Transition};
+use super::{Engine, EnglishContext, LastCommit, Transition};
 use crate::{Composition, InputHistory, Language, Punctuation};
 use std::time::Instant;
 
@@ -49,6 +49,9 @@ pub struct EngineSession {
 
     /// 本会话连续上屏的学习链。
     chain: CommitChain,
+
+    /// 本会话的英文上文。
+    english_context: EnglishContext,
 }
 
 impl Engine {
@@ -80,6 +83,7 @@ impl Engine {
         std::mem::swap(&mut self.displayed, &mut session.displayed);
         std::mem::swap(&mut self.history, &mut session.history);
         std::mem::swap(&mut self.chain, &mut session.chain);
+        std::mem::swap(&mut self.english_context, &mut session.english_context);
         self.forget_span_cache();
         *self.correction_cache.borrow_mut() = None;
         *self.last_query.borrow_mut() = None;
@@ -102,6 +106,7 @@ impl EngineSession {
         self.displayed.clear();
         self.history.clear();
         self.chain = CommitChain::default();
+        self.english_context = EnglishContext::default();
     }
 }
 
@@ -123,6 +128,7 @@ impl Engine {
         self.displayed.clear();
         self.history.clear();
         self.chain = CommitChain::default();
+        self.english_context = EnglishContext::default();
         self.surrounding = None;
         self.last_prediction_scope.clear();
         self.last_question_guess.clear();

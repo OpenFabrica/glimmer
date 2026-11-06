@@ -35,6 +35,9 @@ pub enum InputSource {
 
     /// Tab 接受的云端整句补全。
     CloudSentence,
+
+    /// Tab 接受的英文下一词预测（没有敲键，`keys` 为空）。
+    EnglishPrediction,
 }
 
 impl From<CandidateKind> for InputSource {

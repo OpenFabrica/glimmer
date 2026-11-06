@@ -72,8 +72,9 @@ fn disabling_domain_removes_mixed_completions_and_alias_duplicates() {
 
 #[test]
 fn enabled_domain_completion_beats_generic_frequency_but_not_exact_match() {
+    // 词频是 Zipf × 1000：spring 约 5（6 是 about 这一级的高频词，会让「多敲了一个 b」的纠错与补全打平）
     let general = glimmer_dictionary::WordList::parse(
-        "springboard\tspringboard\t4000\nspringbok\tspringbok\t3500\nspring\tspring\t6000\n",
+        "springboard\tspringboard\t4000\nspringbok\tspringbok\t3500\nspring\tspring\t5000\n",
     )
     .unwrap();
     let mut e = engine().with_english(general);

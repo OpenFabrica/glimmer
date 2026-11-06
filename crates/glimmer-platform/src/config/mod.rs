@@ -220,6 +220,9 @@ font_size = 16
 preedit = "both"
 # 英文模式（Caps Lock 亮着）是否给英文候选：Tab 或方向键选词，空格、回车、标点仍原样上屏敲的字母；false 就是纯直通
 english_candidates = true
+# 英文模式下词后敲空格就预测下一个词，Tab 接受（上屏「词 + 空格」，可以连按）；其他键照常，按了预测就收起。
+# 要有英文语言模型才出；english_candidates 关着时不起作用
+english_prediction = true
 
 # 繁体输出模式。开启后上屏繁体，不影响词库和个人词频的简体记录。
 traditional = false
@@ -611,6 +614,7 @@ mod tests {
         assert_eq!(config.general.learning_language, "en");
         assert!(config.general.translation_reading);
         assert!(config.general.english_candidates);
+        assert!(config.general.english_prediction);
         assert!(!config.general.traditional);
         assert!(config.general.mixed_english_candidates && config.general.emoji_candidates);
         assert_eq!(config.general.shuangpin(), None);

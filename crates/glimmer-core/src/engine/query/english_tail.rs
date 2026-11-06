@@ -1,4 +1,13 @@
-use super::*;
+//! 拼音头 + 英文尾的切法与比分。
+
+use crate::candidate::{Candidate, CandidateKind};
+use crate::correction;
+use crate::engine::learning::Learner;
+use crate::engine::{
+    ENGLISH_SWITCH_PENALTY, ENGLISH_ZIPF_FLOOR, Engine, MIN_COMPLETION_LETTERS,
+    MIN_ENGLISH_TAIL_HEAD_LETTERS, MIN_ENGLISH_TAIL_LETTERS, MIN_PINYIN_LIKE_TAIL_LETTERS,
+};
+use crate::parser::{self, Segmentation};
 
 /// 「拼音头 + 英文尾」的切法：`woxiangxuehaorust` 切成头 `woxiangxuehao` 与尾 rust。
 /// 见 [`Engine::split_english_tail`]。
@@ -76,6 +85,8 @@ impl Engine {
             let head_len = scope.len() - len;
             let tail = &scope[head_len..];
             let words = lists.iter().find(|words| words.get(tail).is_some())?;
+            // 中文模式打不出大写（Shift + 字母先上屏拼音），敲的是小写不说明要小写：用缺省写法（同码第一个），
+            // 能不能切也按它判断
             let word = words.get(tail)?;
             let acronym = word.bytes().any(|b| b.is_ascii_uppercase());
             let known = personal.is_some_and(|words| words.get(tail).is_some());

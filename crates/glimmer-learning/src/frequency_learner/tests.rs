@@ -328,6 +328,45 @@ fn english_words_round_trip_through_tsv_and_form_a_word_list() {
     assert!(saved.contains("gist\t2"));
 }
 
+/// 个人英文词表的编码与随包词表一样去撇号：学过 `don't` 后敲 `dont` 能查到；`dont` 与 `don't` 各记各的次数。
+/// 旧文件只存 `词\t次数`，读进来照样按新编码建表，不用迁移。
+#[test]
+fn personal_english_codes_drop_apostrophes_like_the_bundled_list() {
+    let dir =
+        std::env::temp_dir().join(format!("glimmer-user-english-code-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("user.tsv");
+    let mut learner = FrequencyLearner::from_path(&path).unwrap();
+    learner.learn_english("don't");
+    learner.learn_english("don't");
+    learner.learn_english("dont");
+    assert_eq!(learner.english_count(), 2);
+    let forms: Vec<(&str, u32)> = learner
+        .user_english()
+        .unwrap()
+        .get_all("dont")
+        .iter()
+        .map(|e| (e.word(), e.frequency()))
+        .collect();
+    assert!(forms.contains(&("don't", 2)), "{forms:?}");
+    assert!(forms.contains(&("dont", 1)), "{forms:?}");
+    // 带撇号的编码查不到：全仓库只有去撇号这一种编码
+    assert!(learner.user_english().unwrap().get_all("don't").is_empty());
+    // 以前写下的文件
+    std::fs::write(
+        FrequencyLearner::english_path(&path),
+        "# 微明个人英文词：词\\t次数\nI'm\t3\nrock'n'roll\t1\n",
+    )
+    .unwrap();
+    let reloaded = FrequencyLearner::from_path(&path).unwrap();
+    let list = reloaded.user_english().unwrap();
+    assert_eq!(list.get("im"), Some("I'm"));
+    assert_eq!(list.get("rocknroll"), Some("rock'n'roll"));
+    assert_eq!(list.complete("rockn", 3), ["rock'n'roll"]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn scheme_scoped_tables_live_in_a_subdirectory_and_share_text_keyed_tables() {
     let dir = std::env::temp_dir().join(format!("glimmer-learning-scheme-{}", std::process::id()));

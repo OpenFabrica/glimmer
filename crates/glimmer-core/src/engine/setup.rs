@@ -362,7 +362,11 @@ impl Engine {
 
     /// 进入 / 离开英文模式。英文模式下 [`Self::query`] 只给英文词表的候选，回车与空格仍由壳原样上屏敲的字母，
     /// 不发云联想，也不把原样上屏记成「不纠这个串」。
+    /// 真的切换了中英模式时英文上文作废（壳每个键都会调一次，没变就什么都不做）。
     pub fn set_english_mode(&mut self, on: bool) {
+        if self.english_mode != on {
+            self.break_english_context();
+        }
         self.english_mode = on;
     }
 
@@ -370,9 +374,52 @@ impl Engine {
         self.english_mode
     }
 
+    /// 接随包英文词表；换了词表，预测的写法跟着变，预测缓存清掉。
     pub fn with_english(mut self, words: WordList) -> Self {
         self.english = Some(words);
+        self.english_predictions.borrow_mut().clear();
         self
+    }
+
+    /// 接英文语言模型（`lm-en.qj`，token 是小写、留撇号的词）：英文候选按上文打分、上文的后继也进候选池。
+    /// 不接就按词频排（正常降级，纠错与个人词封顶照旧）。
+    pub fn with_english_lm(mut self, model: Box<dyn LanguageModel>) -> Self {
+        self.english_lm = Some(model);
+        self.english_successors.borrow_mut().clear();
+        self.english_predictions.borrow_mut().clear();
+        self
+    }
+
+    /// 接英文误拼表（`english-misspellings.tsv`）：敲的串正好是、或正是某个常见误拼的开头时给出正确词，最便宜的一档纠错。
+    pub fn with_english_misspellings(mut self, table: Misspellings) -> Self {
+        self.english_misspellings = Some(table);
+        self
+    }
+
+    /// 有没有接英文语言模型。
+    pub fn has_english_lm(&self) -> bool {
+        self.english_lm.is_some()
+    }
+
+    /// 换英文候选打分的常数（评测调参用，壳用缺省值）。
+    pub fn set_english_score(&mut self, params: english::ScoreParams) {
+        self.english_score = params;
+    }
+
+    /// 英文候选打分的常数。
+    pub fn english_score(&self) -> english::ScoreParams {
+        self.english_score
+    }
+
+    /// 换下一词预测的常数（评测调参用，壳用缺省值）；缓存里是按旧常数算的，清掉。
+    pub fn set_english_predict_params(&mut self, params: english::PredictParams) {
+        self.english_predict = params;
+        self.english_predictions.borrow_mut().clear();
+    }
+
+    /// 下一词预测的常数。
+    pub fn english_predict_params(&self) -> english::PredictParams {
+        self.english_predict
     }
 
     pub fn with_translator(mut self, translator: Box<dyn Translator>) -> Self {
@@ -416,7 +463,8 @@ impl Engine {
     }
 
     /// 中文模式里是否给英文词与英文补全候选（配置 `[general] mixed_english_candidates`，缺省开）。
-    /// 关掉后 `hello` 只出拼音候选；英文模式（Caps Lock）的候选另由平台层按 `english_candidates` 决定。
+    /// 关掉后 `hello` 只出拼音候选；英文模式（`[shortcut] mode_switch` 切出来的持久模式，缺省单击 Shift）的候选
+    /// 另由平台层按 `english_candidates` 决定。
     pub fn set_mixed_english(&mut self, on: bool) {
         self.mixed_english = on;
     }
@@ -434,6 +482,17 @@ impl Engine {
     /// 是否给 emoji 候选。
     pub fn emoji_candidates(&self) -> bool {
         self.emoji_candidates
+    }
+
+    /// 英文模式下词后敲空格是否预测下一个词（配置 `[general] english_prediction`，缺省开），Tab 接受。
+    /// `[general] english_candidates` 关着时壳不开英文模式的候选（[`Self::set_english_mode`] 给的是假），这个开关也就不起作用。
+    pub fn set_english_prediction(&mut self, on: bool) {
+        self.english_prediction = on;
+    }
+
+    /// 是否预测下一个英文词。
+    pub fn english_prediction(&self) -> bool {
+        self.english_prediction
     }
 
     /// 候选旁的译词带不带读音（配置 `[general] translation_reading`，缺省带）：英语是美式音标、日语是假名。
@@ -508,6 +567,7 @@ impl Engine {
 
     /// 换掉全部附加词库（导入、移除、开关之后）。读音份额表与格子缓存随之重建 / 作废。
     pub fn set_extra_dictionaries(&mut self, dictionaries: Vec<Dictionary>) {
+        self.english_dead.clear();
         self.extra_english = WordList::from_dictionaries(&dictionaries);
         self.extra_dictionaries = dictionaries;
         self.rebuild_reading_share();

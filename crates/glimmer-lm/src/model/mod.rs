@@ -1,5 +1,6 @@
 //! 词级 n-gram 模型：结构、加载与派生量。打分在 `score`，解析在 `parse`，落盘在 `write`，导出在 `export`。
 
+mod batch;
 mod export;
 mod parse;
 mod score;

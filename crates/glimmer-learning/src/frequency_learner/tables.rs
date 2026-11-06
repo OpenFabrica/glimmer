@@ -1,6 +1,17 @@
 //! 各张表的路径、加载、保存与重建：用户词、按输入串的选择、个人英文词、个人敲错表、个人 n-gram。
 
-use super::*;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+
+use foldhash::HashMap;
+use glimmer_core::storage::write_atomic;
+use glimmer_dictionary::{Dictionary, WordList, english_code};
+
+use super::{
+    ANY_TOKEN, FrequencyLearner, RAW_MARK, USER_CHOICES_FILE, USER_ENGLISH_FILE, USER_NGRAM_FILE,
+    USER_TYPOS_FILE, USER_WORD_FREQUENCY, USER_WORDS_FILE, data_lines, parse_counted_pair,
+};
+use crate::error::LearningError;
 
 impl FrequencyLearner {
     /// 个人英文词表文件与词频文件同目录。
@@ -29,6 +40,9 @@ impl FrequencyLearner {
     }
 
     /// 个人英文词很少，每次变化整个重建词表即可。次数当词频，补全时常用的在前。
+    ///
+    /// 词表编码与随包词表一样用 [`english_code`]（小写、去撇号），敲 `dont` 能查到学过的 `don't`；
+    /// 内存里的键仍是小写写法，`dont` 与 `don't` 各记各的次数。去掉撇号后什么都不剩的不进词表。
     pub(super) fn rebuild_english(&mut self) {
         if self.english.is_empty() {
             self.english_list = None;
@@ -36,8 +50,11 @@ impl FrequencyLearner {
         }
         let tsv: String = self
             .english
-            .iter()
-            .map(|(code, (word, count))| format!("{word}\t{code}\t{count}\n"))
+            .values()
+            .filter_map(|(word, count)| {
+                let code = english_code(word);
+                (!code.is_empty()).then(|| format!("{word}\t{code}\t{count}\n"))
+            })
             .collect();
         match WordList::parse(&tsv) {
             Ok(list) => self.english_list = Some(list),

@@ -72,8 +72,12 @@ pub struct GeneralConfig {
     /// 组句中的拼音显示在行内、候选窗口还是两处都显示。
     pub preedit: PreeditMode,
 
-    /// 英文模式（Caps Lock 亮着）是否给英文候选（补全与拼错纠正）。关掉就是纯直通。
+    /// 英文模式（`[shortcut] mode_switch` 切出来的持久模式，缺省单击 Shift）是否给英文候选（补全与拼错纠正）。关掉就是纯直通。
     pub english_candidates: bool,
+
+    /// 英文模式下词后敲空格就预测下一个词，Tab 接受（上屏「词 + 空格」，可以连按）；其他键照常，按了预测就收起。
+    /// 要有英文语言模型才出。`english_candidates` 关着时不起作用。
+    pub english_prediction: bool,
 
     /// 繁体输出模式。
     pub traditional: bool,
@@ -82,7 +86,7 @@ pub struct GeneralConfig {
     pub chinese_first: bool,
 
     /// 中文模式下（中英混输）是否给英文词与英文补全候选（`hello`、`compa` → company）。缺省开。
-    /// 与 `english_candidates` 不同：那个管英文模式（Caps Lock 亮着）。
+    /// 与 `english_candidates` 不同：那个管英文模式（`[shortcut] mode_switch` 切出来的持久模式）。
     pub mixed_english_candidates: bool,
 
     /// 是否给 emoji 候选（`kaixin` → 😄）。缺省开；嫌挤占候选位置的可以关掉。
@@ -145,6 +149,7 @@ impl Default for GeneralConfig {
             font_size: DEFAULT_FONT_SIZE,
             preedit: PreeditMode::default(),
             english_candidates: true,
+            english_prediction: true,
             traditional: false,
             chinese_first: false,
             mixed_english_candidates: true,
@@ -291,6 +296,16 @@ mod tests {
         assert_eq!(general.page_keys(), ('[', ']'));
         general.page_keys = ",,".to_owned();
         assert_eq!(general.page_keys(), ('[', ']'));
+    }
+
+    #[test]
+    fn english_prediction_defaults_on_and_can_be_turned_off() {
+        assert!(GeneralConfig::default().english_prediction);
+        let parsed: GeneralConfig = toml::from_str("english_prediction = false\n").unwrap();
+        assert!(!parsed.english_prediction);
+        // 老配置里没有这一项：按缺省开
+        let legacy: GeneralConfig = toml::from_str("english_candidates = true\n").unwrap();
+        assert!(legacy.english_prediction);
     }
 
     #[test]

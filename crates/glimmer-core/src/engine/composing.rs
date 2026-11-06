@@ -17,6 +17,9 @@ impl Engine {
             None
         };
         if let Some(text) = converted {
+            for c in text.chars() {
+                self.note_english_char(c);
+            }
             self.history.record(text);
             self.remember_commit(LastCommit::plain(text));
             // 全角标点也是文本流的一部分，与直通字符攒在一起
@@ -29,7 +32,9 @@ impl Engine {
     }
 
     /// 壳把字符原样透传给应用后告知，用于「数字后的点保持半角」，也记入输入历史与输入日志（攒成一条 `passthrough`）。
+    /// 英文上文也在这里跟着变：空格与句中标点不断开、句末标点与换行是句首、其余作废（见 `english_context`）。
     pub fn note_passthrough(&mut self, c: char) {
+        self.note_english_char(c);
         self.punctuation.note_passthrough(c);
         let text = c.encode_utf8(&mut [0; 4]).to_owned();
         self.history.record(&text);
@@ -52,7 +57,9 @@ impl Engine {
 
     /// 壳告知光标离开了刚才上屏的位置（切换应用、点了别处、停用输入法）：之后上屏的词按句首记。
     /// 上次断开之后有过上屏才往输入日志记一条 `break`，连着失焦几次只记一次。
+    /// 英文上文同样作废。
     pub fn break_chain(&mut self) {
+        self.break_english_context();
         self.chain.reset();
         self.recent_commits.clear();
         self.flush_passthrough();
@@ -152,7 +159,9 @@ impl Engine {
     /// 壳告知：不在组句时按了退格，删的是应用里刚上屏的文字。从最近一次上屏往前数，一次上屏的字删光了就是「可能选错了」的信号：
     /// 接着重打那段拼音选了别的词，那次记的学习就退回去（见 [`Self::apply_retraction`]）。
     /// 删得比记着的几次上屏加起来还多说明在改别处，全忘掉。
+    /// 英文上文一律作废：删掉的可能就是上文那个词。
     pub fn note_backspace(&mut self) {
+        self.break_english_context();
         let Some(commit) = self
             .recent_commits
             .iter_mut()
@@ -190,8 +199,10 @@ impl Engine {
         // 上一键的自动上屏壳没取走就又来了一键：那条已经过时
         self.pending_auto_commit = None;
         self.deferred_key = None;
+        self.touch_english_context();
         if self.composition.is_empty() {
             // 新一段组句：从这一键起算耗时、翻页与重打
+            self.english_dead.clear();
             self.composition_started = Some(Instant::now());
             self.page_turns = 0;
             self.retype_snapshot = None;
@@ -379,9 +390,14 @@ impl Engine {
     }
 
     /// 用一段完整拼音替换当前缓冲区，供 CLI 和测试一次性喂入。不经过 [`Self::push`]，五笔不会自动上屏。
+    /// 与逐键敲进来一样算一次按键事件（英文上文刷新时刻、清掉「刚敲过空格」）。
     pub fn set_input(&mut self, input: &str) {
         self.pending_auto_commit = None;
         self.deferred_key = None;
+        if !input.is_empty() {
+            self.touch_english_context();
+        }
+        self.english_dead.clear();
         self.composition.clear();
         for c in input.chars() {
             self.composition.push(c);
@@ -415,9 +431,11 @@ impl Engine {
             self.composition.text().to_owned()
         };
         if raw.is_empty() {
-            // 壳在回车 / 失焦时不管有没有在组句都会来一趟：空的不记日志、不计统计
+            // 壳在回车 / 失焦时不管有没有在组句都会来一趟：空的不记日志、不计统计。
+            // 组句之外来这一趟多半是点了别处（mac 鼠标按下就走这里），英文上文作废
             self.clear();
             self.chain.reset();
+            self.break_english_context();
             return raw;
         }
         self.log_commit(&raw, &raw, InputSource::Raw);
@@ -437,6 +455,12 @@ impl Engine {
         self.punctuation.note_committed(&raw);
         self.history.record(&raw);
         self.chain.reset();
+        // 英文模式原样上屏的是一个词：与选中英文候选一样记进英文上文；中文模式打出来的字母串不当上文
+        if self.english_mode {
+            self.note_english_word(&raw);
+        } else {
+            self.note_other_commit();
+        }
         raw
     }
 }

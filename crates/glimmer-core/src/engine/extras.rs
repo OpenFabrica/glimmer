@@ -88,6 +88,7 @@ impl Engine {
             reading: None,
             translation: None,
         };
+        // 中文模式打不出大写，出缺省写法（同码第一个，`api` → API）
         let word = lists.iter().find_map(|words| words.get(text));
         // 这段字母下用户选中文词（`key` → 可以）比选英文词的次数多：中文词留在第一，英文让到后面；
         // 拼音再不像话也是他自己教的
