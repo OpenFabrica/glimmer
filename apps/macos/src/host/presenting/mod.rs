@@ -6,8 +6,15 @@ mod translation_job;
 pub(super) use notice::Notice;
 pub use translation_job::TranslationJob;
 
+use glimmer_core::{Candidate, CandidateKind, Cell};
+use objc2::MainThreadMarker;
+use objc2::rc::Retained;
+use objc2::runtime::AnyObject;
+use objc2_foundation::NSRect;
+
 use super::cloud::cloud_candidate;
-use super::*;
+use super::{Host, NextWordPhase};
+use crate::candidates::{Frame, Preedit, Row};
 
 impl Host {
     /// 删掉当前页第 `offset` 格的候选：用户词整个删、词库词清学习。返回给用户看的一句话；那格没有候选返回 `None`。
@@ -72,6 +79,7 @@ impl Host {
     /// 记一个 `marked_stale`，由拿得到客户端的路径（[`Self::take_stale_client`]）去清。
     pub fn reset_composition(&mut self) {
         let composing = !self.engine.composition().is_empty();
+        self.dismiss_next_word("组句作废");
         self.engine.break_chain();
         self.engine.clear();
         self.cancel_prediction();
@@ -103,7 +111,7 @@ impl Host {
     pub fn render(&mut self) {
         let size = self.session.layout.page_size();
         let page = self.session.page;
-        let rows: Vec<Row> = self
+        let mut rows: Vec<Row> = self
             .session
             .page_cells()
             .iter()
@@ -122,6 +130,7 @@ impl Host {
                 row
             })
             .collect();
+        label_next_word_rows(&mut rows, self.next_word_phase());
         // 页上的译词告诉 Engine：用户上屏那一刻它们在屏幕上，算「见过」（词汇记录）；窗口收起时传空
         let cells = self.session.page_cells();
         self.engine
@@ -147,5 +156,19 @@ impl Host {
             status: self.status.clone(),
         };
         self.window.show(frame, self.anchor);
+    }
+}
+
+/// 下一词预测只有 Tab 能接（数字照常交给应用）：第一行的序号换成 ⇥，其余行不标序号，免得用户去按数字。
+fn label_next_word_rows(rows: &mut [Row], phase: NextWordPhase) {
+    if phase == NextWordPhase::Idle {
+        return;
+    }
+    for (i, row) in rows.iter_mut().enumerate() {
+        row.index = if i == 0 {
+            "⇥".to_owned()
+        } else {
+            String::new()
+        };
     }
 }

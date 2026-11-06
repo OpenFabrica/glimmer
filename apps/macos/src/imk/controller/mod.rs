@@ -8,9 +8,8 @@ use objc2::runtime::{AnyObject, Sel};
 use std::cell::RefCell;
 
 use glimmer_core::{Candidate, QUESTION_PREFIX};
-use glimmer_platform::{ModeSwitch, Modifiers};
 use objc2::{DefinedClass, define_class, msg_send, sel};
-use objc2_app_kit::{NSEvent, NSEventMask, NSEventModifierFlags, NSEventType, NSMenu};
+use objc2_app_kit::{NSEvent, NSEventMask, NSMenu};
 use objc2_foundation::NSObjectProtocol;
 use objc2_input_method_kit::{IMKInputController, IMKServer};
 
@@ -21,6 +20,8 @@ use crate::menubar;
 
 mod commit;
 mod event;
+mod next_word;
+mod translation;
 
 define_class!(
     // SAFETY:
@@ -86,6 +87,7 @@ define_class!(
                 }
                 host::with(|h| {
                     h.cancel_prediction();
+                    h.dismiss_next_word("commitComposition");
                     h.window.hide();
                 });
             });
@@ -107,6 +109,8 @@ define_class!(
                 let me = self.address();
                 let client = sender.map(objc2::Message::retain);
                 host::with(|h| {
+                    // 换了会话（切应用、换文本框）：上一处的预测不能挂到这里来
+                    h.dismiss_next_word("activateServer");
                     h.active_controller = Some(me);
                     h.active_client = client;
                     h.engine.set_application(bundle);
@@ -169,6 +173,7 @@ define_class!(
                 // 切换输入源时无论如何都收掉候选框，不能留一个孤儿窗口在屏幕上
                 host::with(|h| {
                     h.cancel_prediction();
+                    h.dismiss_next_word("deactivateServer");
                     h.window.hide();
                     h.indicator.deactivate();
                     h.watch.stop();
@@ -192,13 +197,10 @@ define_class!(
     unsafe impl NSObjectProtocol for GlimmerInputController {}
 );
 
-/// 数字行与小键盘的键码对应的数字 1–9（ANSI 布局的物理键）。
-/// 翻译选中文字最多接受多少个字符：再长既慢又贵，也不是输入法该干的事。
-const MAX_TRANSLATE_CHARS: usize = 500;
-
 /// 给本地整句模型看的光标前文最多读多少字符（Engine 自己再按它的前文长度截）。
 const RESCORE_LOOKBACK: usize = glimmer_core::RESCORE_CONTEXT_CHARS;
 
+/// 数字行与小键盘的键码对应的数字 1–9（ANSI 布局的物理键）。
 fn digit_key(key_code: u16) -> Option<usize> {
     Some(match key_code {
         18 | 83 => 1,
@@ -218,97 +220,6 @@ impl GlimmerInputController {
     /// 控制器对象地址，只用来在 Host 里比对「谁是当前激活的会话」，不解引用。
     fn address(&self) -> usize {
         self as *const Self as usize
-    }
-
-    /// Option+数字：上屏当前页第几个候选的译文（学习和拼音消耗与选那个候选一样）。
-    /// 不在组句中时不管；候选没有译文就吞掉按键不动，免得 ¡™£ 进应用。
-    /// 翻译应用里选中的文字：云服务关着、密码框、没有选区都不动（键交回应用）。
-    fn translate_selection(&self, client: TextClient<'_>) -> bool {
-        if !host::with(|h| h.engine.prediction_enabled()).unwrap_or(false) {
-            tracing::info!("云服务没开，翻译快捷键不生效");
-            return false;
-        }
-        if secure_input::enabled() {
-            tracing::debug!("Secure Input 中，不翻译");
-            return false;
-        }
-        let Some((text, range)) = client.selected_text(MAX_TRANSLATE_CHARS) else {
-            // 分不清是没选还是应用不给读（不少 Electron 应用不支持），两种情况都提示一下，键吞掉
-            tracing::debug!("没有选中的文字，或应用不支持读选区");
-            let anchor = client.caret_rect();
-            host::with(|h| {
-                h.show_notice(
-                    "没有选中的文字，或这个应用不支持读取选区（最多 500 字）",
-                    anchor,
-                )
-            });
-            return true;
-        };
-        // 光标位置先在借用之外取好：取的过程会等应用回话，期间别的 IMK 回调可能重入
-        let anchor = client.caret_rect();
-        let sent = host::with(|h| {
-            h.anchor = anchor;
-            h.engine.request_translation(&text).is_some()
-        })
-        .unwrap_or(false);
-        if !sent {
-            return false;
-        }
-        tracing::debug!(chars = text.chars().count(), "翻译选中文字");
-        host::with(|h| h.begin_translation(range));
-        true
-    }
-
-    /// 翻译窗口开着时的按键：回车 / 空格 / 1 用译文替换选区，Esc 放弃；其他键放弃并交回应用。
-    fn handle_translation_review(&self, key: u16, client: TextClient<'_>) -> bool {
-        let job = host::with(|h| h.translation.clone()).flatten();
-        let Some(job) = job else {
-            return false;
-        };
-        match key {
-            // 回车 / 小键盘回车 / 空格 / 1：接受（译文还没到时先等）
-            36 | 76 | 49 | 18 => {
-                if let Some(result) = job.result {
-                    tracing::debug!("接受译文");
-                    client.replace_range(&result, job.range);
-                    host::with(|h| h.end_translation());
-                }
-                true
-            }
-            // Esc：放弃
-            53 => {
-                host::with(|h| h.end_translation());
-                true
-            }
-            _ => {
-                host::with(|h| h.end_translation());
-                false
-            }
-        }
-    }
-
-    fn handle_translation_key(&self, digit: usize, sense: usize, client: TextClient<'_>) -> bool {
-        let composing = host::with(|h| !h.engine.composition().is_empty()).unwrap_or(false);
-        if !composing {
-            return false;
-        }
-        let candidate = host::with(|h| {
-            h.session
-                .index_on_page(digit - 1)
-                .and_then(|index| h.session.candidate(index))
-        })
-        .flatten();
-        let text = candidate
-            .and_then(|c| host::with(|h| h.engine.commit_translation(&c, sense)).flatten());
-        match text {
-            Some(text) => {
-                tracing::debug!(%text, "commit translation");
-                client.insert_text(&text);
-                self.refresh(client);
-            }
-            None => tracing::debug!(digit, sense, "这个候选没有这条译文"),
-        }
-        true
     }
 
     /// 修饰键 + 数字（缺省 ⇧）：删掉当前页第几个候选。不在组句中不管；那格没有候选就吞掉按键不动。
@@ -442,7 +353,15 @@ impl GlimmerInputController {
                     self.commit_raw(client);
                 }
             }
-            host::with(|h| h.engine.note_passthrough(c));
+            host::with(|h| {
+                h.engine.note_passthrough(c);
+                // 词后直通的空格（组句中空格选词之后、空组句时直接敲的空格）：问 Core 有没有下一词预测。
+                // 空格要等这里返回 false 才进应用，所以不在这里取插入点画，交给定时器下一拍。
+                // 预测在显示（或等着画）时敲的空格是「不要它」：空格照常交给应用，但不再取，免得同一个词又弹出来
+                if c == ' ' && !h.next_word_declined() {
+                    h.request_next_word();
+                }
+            });
             return false;
         }
         // 表达式模式（v 开头）：数字与运算符进缓冲区，不当选词 / 翻页键
@@ -559,6 +478,9 @@ impl GlimmerInputController {
             } else if selector == sel!(insertNewline:) {
                 // 回车交给应用：文本流里是一个段落边界
                 host::with(|h| h.engine.note_passthrough('\n'));
+            } else {
+                // 其余编辑动作（方向键、按词 / 按行跳、翻页、Tab、Esc、向前删）交给应用：光标可能动了，英文上文作废
+                host::with(|h| h.engine.break_english_context());
             }
             return false;
         }

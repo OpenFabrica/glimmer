@@ -125,6 +125,9 @@ pub enum Setting {
     /// `[general] english_candidates`，勾选框。
     EnglishCandidates,
 
+    /// `[general] english_prediction`，勾选框：英文模式下预测下一个词；英文候选关着时置灰。
+    EnglishPrediction,
+
     /// `[general] chinese_first`，勾选框：中英混输时中文候选排在英文词前。
     ChineseFirst,
 
@@ -249,6 +252,7 @@ impl Setting {
             Self::Layout => 12,
             Self::Preedit => 13,
             Self::EnglishCandidates => 14,
+            Self::EnglishPrediction => 67,
             Self::ChineseFirst => 51,
             Self::MixedEnglishCandidates => 53,
             Self::EmojiCandidates => 54,
@@ -330,6 +334,7 @@ impl Setting {
             12 => Self::Layout,
             13 => Self::Preedit,
             14 => Self::EnglishCandidates,
+            67 => Self::EnglishPrediction,
             51 => Self::ChineseFirst,
             53 => Self::MixedEnglishCandidates,
             54 => Self::EmojiCandidates,
@@ -420,6 +425,7 @@ mod tests {
             Setting::Preedit,
             Setting::PunctuationMode,
             Setting::EnglishCandidates,
+            Setting::EnglishPrediction,
             Setting::ChineseFirst,
             Setting::MixedEnglishCandidates,
             Setting::EmojiCandidates,

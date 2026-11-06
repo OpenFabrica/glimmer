@@ -129,6 +129,7 @@ pub fn init(mtm: MainThreadMarker, info: &BundleInfo) -> Result<(), HostError> {
         );
         engine = engine.with_language_model(Box::new(model));
     }
+    engine = attach_english_extras(engine);
     let window = CandidateWindow::new(mtm);
     let indicator = ModeIndicator::new(mtm);
     let menu = InputMenu::new(mtm, version);
@@ -172,6 +173,9 @@ pub fn init(mtm: MainThreadMarker, info: &BundleInfo) -> Result<(), HostError> {
             text_replacements: Vec::new(),
             apps: AppsConfig::default(),
             monitor,
+            next_word: NextWordPhase::Idle,
+            next_word_declined: false,
+            next_word_monitor: NextWordMonitor::new(mtm),
             cloud_test: None,
             cloud_test_monitor: CloudTestMonitor::new(mtm),
             rescore: RescoreMonitor::new(mtm),
@@ -301,4 +305,33 @@ pub(super) fn load_glossary(language: Language) -> Result<LayeredTranslator, Hos
         );
     }
     Ok(LayeredTranslator::new(bundled, personal))
+}
+
+/// 英文语言模型（`lm-en.qj`）与误拼表（`english-misspellings.tsv`）随包可选：没有或读不了只记日志，
+/// 英文候选照常按词频排、少一档纠错，不影响中文。启动日志里的词数用来确认模型真的装上了。
+fn attach_english_extras(mut engine: Engine) -> Engine {
+    if let Ok(path) = paths::resource("lm-en.qj") {
+        match NgramModel::from_path(&path) {
+            Ok(model) => {
+                tracing::info!(
+                    words = model.word_count(),
+                    bigrams = model.bigram_count(),
+                    trigrams = model.trigram_count(),
+                    "英文语言模型已加载"
+                );
+                engine = engine.with_english_lm(Box::new(model));
+            }
+            Err(error) => tracing::warn!(%error, "英文语言模型加载失败，英文候选按词频排"),
+        }
+    }
+    if let Ok(path) = paths::resource("english-misspellings.tsv") {
+        match Misspellings::from_path(&path) {
+            Ok(table) => {
+                tracing::info!(pairs = table.len(), "英文误拼表已加载");
+                engine = engine.with_english_misspellings(table);
+            }
+            Err(error) => tracing::warn!(%error, "英文误拼表加载失败，跳过"),
+        }
+    }
+    engine
 }

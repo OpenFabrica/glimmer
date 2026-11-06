@@ -143,6 +143,14 @@ if [[ -f data/generated/dict.tsv || -f data/generated/dict.qj ]]; then
   for f in assets/lexicon/english.tsv data/generated/english.tsv; do
     [[ -f "$f" ]] && cp "$f" "$APP/Contents/Resources/"
   done
+  # 英文语言模型与误拼表可选（dict-convert english-ngram / english-misspellings 生成）：没有就英文候选按词频排、少一档纠错
+  for f in data/generated/lm-en.qj data/generated/english-misspellings.tsv; do
+    if [[ -f "$f" ]]; then
+      cp "$f" "$APP/Contents/Resources/"
+    else
+      echo "注意: 没有 $f，包里不带它（英文候选照常，只是少了上文或误拼表）" >&2
+    fi
+  done
   echo "使用 data/generated/ 的产品数据（自建词库）"
 fi
 # 五笔码表（assets/wubi/<方案>/ 的码表转出，各方案的许可证与署名全文随包，具体许可见各自的 README.md）：

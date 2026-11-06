@@ -1,6 +1,15 @@
 //! NSEvent 分发与快捷键优先级；输入与候选操作复用控制器。
 
-use super::*;
+use glimmer_platform::{ModeSwitch, Modifiers};
+use objc2::{DefinedClass, sel};
+use objc2_app_kit::{NSEvent, NSEventModifierFlags, NSEventType};
+
+use super::{GlimmerInputController, digit_key};
+use crate::host;
+use crate::imk::{TextClient, modifiers};
+
+/// Caps Lock 的键码：按下就是切中英（见 `modifiers::english_mode`）。
+const CAPS_LOCK_KEY: u16 = 57;
 
 impl GlimmerInputController {
     /// Shift 在松开时识别；普通按键先匹配配置快捷键，再分发命令键与文本。
@@ -17,6 +26,9 @@ impl GlimmerInputController {
             if matches!(key, 56 | 60) {
                 tracing::info!(key, flags = flags.0, tapped, ?switch, "Shift 事件");
             }
+            if key == CAPS_LOCK_KEY {
+                host::with(|h| h.dismiss_next_word("Caps Lock"));
+            }
             if tapped && switch == Some(ModeSwitch::Shift) {
                 self.switch_mode(client);
                 return true;
@@ -29,7 +41,10 @@ impl GlimmerInputController {
             NSEventType::LeftMouseDown | NSEventType::RightMouseDown | NSEventType::OtherMouseDown
         ) {
             // 订阅 flagsChanged 后 IMK 不再提供缺省鼠标收尾；点击先结束组句，事件仍交还应用。
-            host::with(|h| h.end_translation());
+            host::with(|h| {
+                h.end_translation();
+                h.dismiss_next_word("鼠标");
+            });
             self.commit_raw(client);
             return false;
         }
@@ -52,6 +67,10 @@ impl GlimmerInputController {
         };
         // 提示在显示：敲任何键先收掉，键照常处理
         host::with(|h| h.clear_notice());
+        // 下一词预测显示着：不带修饰键的 Tab 接受；其他键先收起预测，再照下面现有的路处理，返回值不变
+        if let Some(handled) = self.intercept_next_word(key, pressed, client) {
+            return handled;
+        }
         let typed = event
             .charactersIgnoringModifiers()
             .map(|c| c.to_string().to_ascii_lowercase());
@@ -137,6 +156,8 @@ impl GlimmerInputController {
             return self.handle_command(selector, client);
         }
         if command || control {
+            // ⌘ / ⌃ 组合键交给应用（撤销、全选……）：英文上文可能已经不对了
+            host::with(|h| h.engine.break_english_context());
             return false;
         }
         match event.characters() {
@@ -147,7 +168,10 @@ impl GlimmerInputController {
 
     /// 两种切换方式共用收尾，未完成输入原样上屏，不丢字。
     fn switch_mode(&self, client: TextClient<'_>) {
-        host::with(|h| h.end_translation());
+        host::with(|h| {
+            h.end_translation();
+            h.dismiss_next_word("切中英");
+        });
         self.commit_raw(client);
         modifiers::toggle_mode();
         tracing::info!(english = modifiers::english_mode(), "中英切换");

@@ -50,6 +50,9 @@ impl Host {
         self.page_keys = config.general.page_keys();
         self.preedit_mode = config.general.preedit;
         self.english_candidates = config.general.english_candidates;
+        // 下一词预测：Core 只在英文模式（`english_candidates` 开着时才打开）里出，这里只递开关
+        self.engine
+            .set_english_prediction(config.general.english_prediction);
         self.apps = config.apps.clone();
         self.window.set_theme(config.general.theme);
         self.window.set_layout(config.general.layout);

@@ -1,4 +1,4 @@
-//! 「通用」页：学习语言与译词读音、每页候选数、拼音方案 / 五笔、英文模式候选、中文模式英文词与 emoji 候选开关。
+//! 「通用」页：学习语言与译词读音、每页候选数、拼音方案 / 五笔、英文模式候选与下一词预测、中文模式英文词与 emoji 候选开关。
 
 use glimmer_core::{Language, PunctuationMode};
 use glimmer_platform::{Config, MAX_PAGE_SIZE, Scheme};
@@ -46,6 +46,9 @@ pub struct GeneralPage {
 
     /// 终端 / 编辑器里不给英文候选。
     english_off_in_apps: Retained<NSButton>,
+
+    /// 英文模式下预测下一个词（Tab 接受）；不给英文候选时置灰。
+    english_prediction: Retained<NSButton>,
 
     /// 中文模式下给英文词候选。
     mixed_english: Retained<NSButton>,
@@ -200,6 +203,8 @@ impl GeneralPage {
             mtm,
             "终端、iTerm、Warp、Ghostty、VS Code、Cursor、Zed、JetBrains、Xcode 等，那里的候选窗口会挡住应用自己的补全；名单可在配置文件里改。",
         );
+        let english_prediction = checkbox(mtm, "预测下一个词", Setting::EnglishPrediction, target);
+        row_sub_checkbox(layout, &english_prediction);
         let mixed_english = checkbox(
             mtm,
             "输入拼音时也给英文词候选",
@@ -243,6 +248,7 @@ impl GeneralPage {
             traditional,
             english,
             english_off_in_apps,
+            english_prediction,
             chinese_first,
             mixed_english,
             emoji,
@@ -317,6 +323,10 @@ impl GeneralPage {
             config.apps.has_english_candidates_off(),
         );
         self.english_off_in_apps
+            .setEnabled(general.english_candidates);
+        // 预测只在英文模式给候选时出（Core 的英文模式跟着 english_candidates 开）
+        set_checked(&self.english_prediction, general.english_prediction);
+        self.english_prediction
             .setEnabled(general.english_candidates);
         set_checked(&self.chinese_first, general.chinese_first);
         set_checked(&self.mixed_english, general.mixed_english_candidates);

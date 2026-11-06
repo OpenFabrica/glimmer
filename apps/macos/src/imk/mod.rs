@@ -42,6 +42,7 @@ pub fn recover_from_panic(client: Option<TextClient<'_>>) {
             let text = h.engine.composition().text().to_owned();
             h.engine.clear();
             h.cancel_prediction();
+            h.dismiss_next_word("panic 善后");
             h.window.hide();
             text
         });

@@ -12,6 +12,7 @@ mod dictionaries;
 mod init;
 mod learn_text;
 mod model;
+mod next_word;
 mod presenting;
 mod session;
 mod settings;
@@ -22,10 +23,10 @@ use std::cell::RefCell;
 use std::path::PathBuf;
 
 use glimmer_core::{
-    Candidate, CandidateKind, Cell, CloudWord, EmojiTable, Engine, FuzzyRules, Language, ModeKeys,
+    Candidate, CandidateKind, CloudWord, EmojiTable, Engine, FuzzyRules, Language, ModeKeys,
     NoGlossFiller, NoInputLogger, NoPredictor, NoTranslator, Prediction,
 };
-use glimmer_dictionary::{Dictionary, WordList};
+use glimmer_dictionary::{Dictionary, Misspellings, WordList};
 use glimmer_learning::{FrequencyLearner, InputLog, UsageStats, VocabularyBook};
 use glimmer_lm::NgramModel;
 use glimmer_platform::extra_dictionaries;
@@ -46,7 +47,7 @@ use objc2_foundation::{NSProcessInfo, NSRect, NSString};
 
 use crate::app::BundleInfo;
 use crate::app::{Settings, logging, paths};
-use crate::candidates::{CandidateWindow, Frame, Preedit, Row};
+use crate::candidates::{CandidateWindow, Preedit};
 use crate::error::HostError;
 use crate::menubar::{InputMenu, MenuAction, ModeIndicator};
 use crate::preferences::{PreferencesWindow, Setting, SettingValue, WUBI_VARIANTS};
@@ -56,6 +57,8 @@ use config::{ConfigWatch, TextReplacement};
 pub use dictionaries::DictionaryInfo;
 pub use init::init;
 use model::RescoreMonitor;
+use next_word::NextWordMonitor;
+pub use next_word::NextWordPhase;
 use presenting::Notice;
 pub use presenting::TranslationJob;
 pub use session::Session;
@@ -155,6 +158,15 @@ pub struct Host {
 
     /// 联想结果轮询定时器。
     pub monitor: PredictMonitor,
+
+    /// 英文下一词预测的显示阶段（预测本身在 Core）；不是 `Idle` 时候选窗口归它用。
+    next_word: NextWordPhase,
+
+    /// 当前这一键按下时预测在显示或等着画（用户不要它）：这一键后的空格不再取预测。每个按键开头重设。
+    next_word_declined: bool,
+
+    /// 下一词预测的轮询定时器：等一拍再画、发现过期。
+    next_word_monitor: NextWordMonitor,
 
     /// 进行中的云服务连通性测试（「云服务」页「测试连接」按钮）；没在测为 `None`。
     cloud_test: Option<ConnectionTest>,
