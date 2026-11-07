@@ -83,6 +83,11 @@
 - [ ] Windows：同一个输入框里用鼠标点到别处，TSF 收不到通知，下一词预测留到 5 秒过期，这期间按 Tab 会把词插到新光标处。彻底修要加 `ITfTextEditSink`
 - [ ] 下一词预测不能用鼠标点：三个平台点预测候选都不接受，只能按 Tab（候选窗都不收点击）
 - [ ] Linux 下一词预测真机逐个看：有些客户端收到上屏后马上 Reset，预测可能被立刻收掉（GTK3、GTK4、Qt、Firefox、Chromium、终端）
+- [ ] 英文辅助开关（`[shortcut] english_assist`，2026-11-07 做，mac 真机已验）Windows 真机待验：① 英文模式按 Ctrl+Shift+E 状态条「英+」↔「英」、再敲字母直通 / 出候选、`config.toml` 的 `english_candidates` 跟着变；② 敲到 `hel` 时按，`hel` 原样上屏、候选收起；③ 中文模式按只翻设置、拼音不丢；
+  ④ UWP 应用与 VS Code 里保留键都生效（微明在前台时这个组合被拿走，VS Code 自己的 Ctrl+Shift+E 用不了）；⑤ 设置程序改修饰键后要切走再切回输入法才登记；改成与翻译键相同时界面提示「已停用」；⑥ 密码框里按直通不翻转
+- [ ] 英文辅助开关 Linux 真机待验：① IBus 与 Fcitx5 下英文模式按 Ctrl+Shift+E 在「英+」↔「英」间切、应用收不到这个键（旧版 ibus 1.5.17 左右的表情热键默认也是 Ctrl+Shift+E，看会不会被 daemon 先截走）；② 英文组词中按，已敲字母原样上屏；③ IBus 面板点「英文补全、纠错、预测」勾选与「英+」同步；
+  ④ 中文模式按只翻开关、仍显示「中」；⑤ Ctrl+Shift+T 等其他 Ctrl 组合照常给应用。Fcitx5 的 `addon/src/{action,state,engine}.*` 这次也只做了语法检查，和上面 ★ 那条一起链一次
+- [ ] 英文辅助开关 mac 还差一眼：菜单栏「英+」字样与菜单项勾选没截到图（按键路径与配置写回已验）；从菜单点开关时正在组的英文词要等下一键才原样上屏（借用 Host 期间找不到应用，不能马上上屏）
 - [ ] ★ Fcitx5 的 C++ 薄壳（这次为下一词预测改了 `addon/src/state.*` 与 `candidate.cpp`）只做了语法检查、没整包链接，发版前要跑一次 `apps/linux/scripts/package-docker.sh`
 - [ ] Windows 行内模式下同一输入框连续组句，第二段起拿不到光标前文：上屏后的编辑会话把 `Shared::context_reported` 置 true 并送光标前文，但 Server 在组句为空时丢掉它（`crates/glimmer-server/src/dispatch/rescore/mod.rs` 的 `set_surrounding` 开头组句为空就返回）。原有问题，与下一词预测无关
 - [ ] 英文下一词预测在句首：句末标点、回车之后不预测，因为句首词要配大写（模型 token 是小写），要先定大写规则
