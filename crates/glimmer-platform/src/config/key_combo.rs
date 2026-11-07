@@ -27,6 +27,12 @@ impl KeyCombo {
         key: 't',
     };
 
+    /// 开关英文辅助（`[shortcut] english_assist`）的缺省组合：⌃⇧E / Ctrl+Shift+E。
+    pub const ENGLISH_ASSIST_DEFAULT: Self = Self {
+        modifiers: Modifiers::SHIFT_CONTROL,
+        key: 'e',
+    };
+
     /// 配置文件里的写法。
     pub fn key_string(&self) -> String {
         format!("{}+{}", self.modifiers.key(), self.key)

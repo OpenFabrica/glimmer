@@ -72,7 +72,8 @@ pub struct GeneralConfig {
     /// 组句中的拼音显示在行内、候选窗口还是两处都显示。
     pub preedit: PreeditMode,
 
-    /// 英文模式（`[shortcut] mode_switch` 切出来的持久模式，缺省单击 Shift）是否给英文候选（补全与拼错纠正）。关掉就是纯直通。
+    /// 英文模式（`[shortcut] mode_switch` 切出来的持久模式，缺省单击 Shift）带补全、纠错、下一词预测；
+    /// 关着时按什么上什么，和系统自带的英文一样。可用 `[shortcut] english_assist` 随时开关。
     pub english_candidates: bool,
 
     /// 英文模式下词后敲空格就预测下一个词，Tab 接受（上屏「词 + 空格」，可以连按）；其他键照常，按了预测就收起。

@@ -27,6 +27,9 @@ pub struct ShortcutConfig {
     /// macOS 中英文切换：单击 Shift，或修饰键加字母，不能与翻译选中文字相同。
     pub mode_switch: ModeSwitch,
 
+    /// 开关「英文模式带补全、纠错、预测」：各壳收到就翻转 `[general] english_candidates` 并写回配置文件。
+    pub english_assist: KeyCombo,
+
     /// 数字键配这些修饰键：删掉候选（用户词整个删掉，词库词清掉对它的学习）。
     pub delete_candidate: Modifiers,
 }
@@ -44,6 +47,7 @@ impl Default for ShortcutConfig {
             translation_second,
             translate_selection: KeyCombo::TRANSLATE_DEFAULT,
             mode_switch: ModeSwitch::default(),
+            english_assist: KeyCombo::ENGLISH_ASSIST_DEFAULT,
             delete_candidate: Modifiers::SHIFT,
         }
     }
@@ -61,6 +65,17 @@ impl ShortcutConfig {
                     && combo != self.translate_selection
             })
             .then_some(self.mode_switch)
+    }
+
+    /// 开关英文辅助的组合键；不是修饰键加字母、或与翻译键 / 中英切换组合键相同时禁用。
+    /// 冲突时 mode_switch 优先（它不检查本键），这里让路，保证一个组合键只触发一个动作。
+    pub fn english_assist_keys(&self) -> Option<KeyCombo> {
+        let combo = self.english_assist;
+        (combo.key.is_ascii_alphabetic()
+            && !combo.modifiers.is_empty()
+            && combo != self.translate_selection
+            && self.mode_switch.combo() != Some(combo))
+        .then_some(combo)
     }
 
     /// 删候选的修饰键；为空或与任一组译词键撞了就退回缺省。
@@ -155,5 +170,45 @@ mod tests {
         assert_eq!(parsed.mode_switch_keys(), None);
         parsed.mode_switch = "option+1".parse().unwrap();
         assert_eq!(parsed.mode_switch_keys(), None);
+    }
+
+    #[test]
+    fn english_assist_defaults_when_missing_and_parses() {
+        let old: ShortcutConfig = toml::from_str("expression = \"v\"\n").unwrap();
+        assert_eq!(old.english_assist, KeyCombo::ENGLISH_ASSIST_DEFAULT);
+        assert_eq!(
+            old.english_assist_keys(),
+            Some(KeyCombo::ENGLISH_ASSIST_DEFAULT)
+        );
+        assert_eq!(old.english_assist.key_string(), "control+shift+e");
+        // Windows 键名读回来等价
+        let custom: ShortcutConfig = toml::from_str("english_assist = \"ctrl+alt+g\"\n").unwrap();
+        assert_eq!(
+            custom.english_assist_keys().unwrap().key_string(),
+            "control+option+g"
+        );
+    }
+
+    #[test]
+    fn english_assist_gives_way_on_conflicts() {
+        let mut config = ShortcutConfig {
+            english_assist: KeyCombo::TRANSLATE_DEFAULT,
+            ..ShortcutConfig::default()
+        };
+        assert_eq!(config.english_assist_keys(), None);
+        // 中英切换是组合键且与本键相同：本键让路，中英切换照常
+        config.english_assist = KeyCombo::ENGLISH_ASSIST_DEFAULT;
+        config.mode_switch = ModeSwitch::Combo(KeyCombo::ENGLISH_ASSIST_DEFAULT);
+        assert_eq!(config.english_assist_keys(), None);
+        assert_eq!(config.mode_switch_keys(), Some(config.mode_switch));
+        // 只有字母没修饰键、或键是数字，都禁用
+        config.mode_switch = ModeSwitch::Shift;
+        config.english_assist = KeyCombo {
+            modifiers: Modifiers::default(),
+            key: 'e',
+        };
+        assert_eq!(config.english_assist_keys(), None);
+        config.english_assist = "control+shift+9".parse().unwrap();
+        assert_eq!(config.english_assist_keys(), None);
     }
 }

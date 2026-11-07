@@ -164,6 +164,8 @@ translation_second = "shift+option"
 translate_selection = "control+option+t"
 # macOS 中英文切换：shift 为单击 Shift，也可写 control+option+m 等修饰键 + 字母组合，不能与翻译键相同
 mode_switch = "shift"
+# 开关英文模式的补全、纠错、下一词预测（即 [general] 的 english_candidates）：修饰键 + 字母，不能与上面两个键相同
+english_assist = "control+shift+e"
 # 数字键配这些修饰键删掉候选：用户词（云端选过的、自动造的）整个删掉，词库里的词清掉对它的学习记录。组句中要打感叹号先把词上屏
 delete_candidate = "shift"
 "#
@@ -180,6 +182,8 @@ translation = "ctrl"
 translation_second = "shift+ctrl"
 # 把应用里选中的文字译成学习语言（要开着云服务）：Windows 上还没接
 translate_selection = "ctrl+alt+t"
+# 开关英文模式的补全、纠错、下一词预测（即 [general] 的 english_candidates）：修饰键 + 字母，不能与翻译键相同
+english_assist = "ctrl+shift+e"
 # 数字键配这些修饰键删掉候选：用户词（云端选过的、自动造的）整个删掉，词库里的词清掉对它的学习记录。组句中要打感叹号先把词上屏
 delete_candidate = "shift"
 "#
@@ -218,7 +222,8 @@ font = ""
 font_size = 16
 # 组句中的拼音显示在哪：both 行内和候选窗口 / inline 只在行内 / window 只在候选窗口（应用里不放 marked text）
 preedit = "both"
-# 英文模式（Caps Lock 亮着）是否给英文候选：Tab 或方向键选词，空格、回车、标点仍原样上屏敲的字母；false 就是纯直通
+# 英文模式带补全、纠错、下一词预测：Tab 或方向键选词，空格、回车、标点仍原样上屏敲的字母；
+# false 就按什么上什么，和系统自带的英文一样。可用 [shortcut] 的 english_assist 随时开关
 english_candidates = true
 # 英文模式下词后敲空格就预测下一个词，Tab 接受（上屏「词 + 空格」，可以连按）；其他键照常，按了预测就收起。
 # 要有英文语言模型才出；english_candidates 关着时不起作用
@@ -627,6 +632,10 @@ mod tests {
         assert_eq!(
             config.shortcut.translation,
             Config::default().shortcut.translation
+        );
+        assert_eq!(
+            config.shortcut.english_assist_keys(),
+            Some(KeyCombo::ENGLISH_ASSIST_DEFAULT)
         );
     }
 
