@@ -54,6 +54,7 @@ impl Component for Settings {
         settings
     }
 
+    /// 处理界面消息：多数是把一个设置写回配置文件。
     fn update(&mut self, message: Message, context: &ComponentContext<Self>) {
         match message {
             Message::Navigate(Some(tag)) => self.page = tag,
@@ -218,6 +219,11 @@ impl Component for Settings {
                 let key = self.config.shortcut.translate_selection.key;
                 let combo = format!("{}+{key}", shortcut::MODIFIERS[i].1);
                 self.save("shortcut", "translate_selection", combo);
+            }
+            Message::EnglishAssist(Some(i)) if i < shortcut::MODIFIERS.len() => {
+                let key = self.config.shortcut.english_assist.key;
+                let combo = format!("{}+{key}", shortcut::MODIFIERS[i].1);
+                self.save("shortcut", "english_assist", combo);
             }
 
             // 模糊音页

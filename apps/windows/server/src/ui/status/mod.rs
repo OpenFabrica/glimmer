@@ -158,10 +158,10 @@ impl StatusBar {
         }
     }
 
-    /// 模式格的文字：中 / 英 / 注，开着双拼时跟方案名。
+    /// 模式格的文字：中 / 英 / 注，开着双拼时跟方案名；英文模式带补全、纠错、预测时写「英+」，直通时「英」。
     fn mode_text(view: &StatusView) -> String {
         if view.english {
-            "英".to_owned()
+            if view.english_assist { "英+" } else { "英" }.to_owned()
         } else if view.zhuyin {
             "注".to_owned()
         } else {

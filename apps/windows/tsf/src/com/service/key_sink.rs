@@ -1,5 +1,5 @@
 //! `ITfKeyEventSink`：所有键先经 `OnTestKeyDown` 判吃不吃（[`TextService_Impl::would_eat`]，与 Router 的分派对齐），
-//! 吃的键在 `OnKeyDown` 里转发给 Server 并按结果更新文档；单击 Shift 的判定与保留键命中也在这里。
+//! 吃的键在 `OnKeyDown` 里转发给 Server 并按结果更新文档；单击 Shift 的判定与保留键（翻译选中文字、开关英文辅助）命中也在这里。
 //! 上下文禁了键盘（密码框，见 [`context`](crate::com::context)）时没在组句的键一律放行。
 //! 显示着英文下一词预测时只多吃一个 Tab；其余键吃不吃与没显示时完全一样，不吃的照常交给应用并通知 Server 收起预测。
 
@@ -74,14 +74,23 @@ impl ITfKeyEventSink_Impl for TextService_Impl {
         Ok(FALSE)
     }
 
-    /// 翻译选中文字的保留键命中：当作按下了那个组合键转发给 Server（绕过 `would_eat`）。
+    /// 翻译选中文字 / 开关英文辅助的保留键命中：当作按下了那个组合键转发给 Server（绕过 `would_eat`），
+    /// Router 按组合认是哪一个。
     fn OnPreservedKey(&self, pic: Ref<ITfContext>, rguid: *const GUID) -> Result<BOOL> {
-        if unsafe { *rguid } != preserved::GUID_TRANSLATE || self.keyboard_disabled(&pic) {
-            return Ok(FALSE);
-        }
-        let Some(combo) = self.translate_combo.get() else {
+        let guid = unsafe { *rguid };
+        let combo = if guid == preserved::GUID_TRANSLATE {
+            self.translate_combo.get()
+        } else if guid == preserved::GUID_ENGLISH_ASSIST {
+            self.english_assist_combo.get()
+        } else {
+            None
+        };
+        let Some(combo) = combo else {
             return Ok(FALSE);
         };
+        if self.keyboard_disabled(&pic) {
+            return Ok(FALSE);
+        }
         let event = preserved::key_event(combo, self.mode_state.english());
         Ok(self.forward_key(pic, event).into())
     }

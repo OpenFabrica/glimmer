@@ -1,5 +1,5 @@
-//! 「快捷键」页：翻页键、模式键，译词 / 删候选 / 翻译选中文字的修饰键。
-//! 翻译选中文字只改修饰键，字母键固定用配置里当前的；要换字母直接改 `config.toml`。
+//! 「快捷键」页：翻页键、模式键，译词 / 删候选 / 翻译选中文字 / 开关英文辅助的修饰键。
+//! 翻译选中文字与开关英文辅助只改修饰键，字母键固定用配置里当前的；要换字母直接改 `config.toml`。
 
 use glimmer_platform::Modifiers;
 use windows_reactor::*;
@@ -50,8 +50,15 @@ fn modifier_combo(current: Modifiers, callback: Callback<Option<usize>>) -> Comb
         .on_selection_changed(callback)
 }
 
+/// 快捷键页：每个可配的快捷键一行，改了直接写回 `[shortcut]`（翻页键写 `[general]`）。
 pub(crate) fn view(settings: &Settings, context: &mut ViewContext<Settings>) -> View {
     let s = &settings.config.shortcut;
+    // 与翻译选中文字撞了组合时 Server 与 DLL 都不认这个键，界面上要说出来，不然用户按了没反应
+    let assist_hint = if s.english_assist_keys().is_some() {
+        "按这组键 + 当前字母（缺省 Ctrl+Shift+E）随时开关英文模式的补全、纠错、预测。这里只改修饰键，字母固定用当前的。"
+    } else {
+        "现在与别的快捷键相同，已停用；换一组修饰键。"
+    };
     let rows = [
         field(
             "翻页键",
@@ -105,6 +112,14 @@ pub(crate) fn view(settings: &Settings, context: &mut ViewContext<Settings>) -> 
             modifier_combo(
                 s.translate_selection.modifiers,
                 context.callback(Message::TranslateSelection),
+            ),
+        ),
+        field(
+            "开关英文辅助",
+            assist_hint,
+            modifier_combo(
+                s.english_assist.modifiers,
+                context.callback(Message::EnglishAssist),
             ),
         ),
     ];

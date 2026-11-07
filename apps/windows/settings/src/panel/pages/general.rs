@@ -49,6 +49,7 @@ fn string_combo(
         .on_selection_changed(callback)
 }
 
+/// 通用页：方案、标点、英文模式与候选来源等开关，改了直接写回配置文件。
 pub(crate) fn view(settings: &Settings, context: &mut ViewContext<Settings>) -> View {
     let g = &settings.config.general;
     let wubi = &settings.config.wubi;
@@ -152,8 +153,8 @@ pub(crate) fn view(settings: &Settings, context: &mut ViewContext<Settings>) -> 
                 .on_toggled(context.callback(Message::EnglishFullWidthPunctuation)),
         ),
         field(
-            "英文模式（Caps Lock）也给候选",
-            "Tab 或方向键选词；空格、回车、标点仍原样上屏敲的字母，不选词时与直接打字一样。",
+            "英文模式带补全、纠错、预测",
+            "关着时按什么上什么，和系统自带的英文一样；可用快捷键随时开关。",
             ToggleSwitch::new()
                 .is_on(g.english_candidates)
                 .on_toggled(context.callback(Message::EnglishCandidates)),

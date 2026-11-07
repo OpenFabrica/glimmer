@@ -74,6 +74,9 @@ pub struct TextService {
 
     /// 登记成保留键的「翻译选中文字」组合；停用时撤掉（见 [`preserved`](crate::com::key::preserved)）。
     translate_combo: Cell<Option<KeyCombo>>,
+
+    /// 登记成保留键的「开关英文辅助」组合；配置无效 / 冲突时没登记为 `None`，停用时撤掉。
+    english_assist_combo: Cell<Option<KeyCombo>>,
 }
 
 thread_local! {
@@ -125,6 +128,7 @@ impl TextService {
             shift_tap: ShiftTap::default(),
             profile_cookie: Cell::new(None),
             translate_combo: Cell::new(None),
+            english_assist_combo: Cell::new(None),
         }
     }
 }
