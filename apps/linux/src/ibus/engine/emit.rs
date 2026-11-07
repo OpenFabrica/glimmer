@@ -5,7 +5,9 @@ use zbus::object_server::SignalEmitter;
 use super::Engine;
 use crate::frontend::Output;
 use crate::frontend::view::PreeditView;
-use crate::ibus::variant::{Attribute, lookup_table, mode_property, property_list, text};
+use crate::ibus::variant::{
+    Attribute, assist_property, lookup_table, mode_property, property_list, text,
+};
 
 /// `IBUS_ENGINE_PREEDIT_CLEAR`：收起 preedit 时用，没有东西要落定。
 const PREEDIT_CLEAR: u32 = 0;
@@ -52,10 +54,15 @@ async fn emit_one(emitter: &SignalEmitter<'_>, output: Output) -> zbus::Result<(
             Engine::update_lookup_table(emitter, lookup_table(&view), true).await
         }
         Output::Candidates(None) => Engine::hide_lookup_table(emitter).await,
-        Output::RegisterProperties { english } => {
-            Engine::register_properties(emitter, property_list(vec![mode_property(english)])).await
+        Output::RegisterProperties { english, assist } => {
+            let properties = vec![mode_property(english, assist), assist_property(assist)];
+            Engine::register_properties(emitter, property_list(properties)).await
         }
-        Output::Mode { english } => Engine::update_property(emitter, mode_property(english)).await,
+        // 两个属性都刷：英文辅助可能在别处刚切过，中英切换时也要对上
+        Output::Mode { english, assist } => {
+            Engine::update_property(emitter, mode_property(english, assist)).await?;
+            Engine::update_property(emitter, assist_property(assist)).await
+        }
     }
 }
 

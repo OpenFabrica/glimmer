@@ -51,7 +51,8 @@ pub struct Entry {
 }
 
 impl From<Output> for Entry {
-    /// 按指令种类摊开；`RegisterProperties` 与 `Mode` 在 Fcitx5 里是同一件事（刷新状态区的中 / 英），合成一种。
+    /// 按指令种类摊开；`RegisterProperties` 与 `Mode` 在 Fcitx5 里是同一件事（刷新状态区的中 / 英 / 英+），合成一种。
+    /// 英文辅助开关不随指令带：C++ 刷新状态区时经 `glimmer_session_english_assist` 现取。
     fn from(output: Output) -> Self {
         match output {
             Output::Commit(text) => Self {
@@ -66,7 +67,7 @@ impl From<Output> for Entry {
                 text: text.as_deref().map(c_string),
                 ..Self::default()
             },
-            Output::RegisterProperties { english } | Output::Mode { english } => Self {
+            Output::RegisterProperties { english, .. } | Output::Mode { english, .. } => Self {
                 kind: GLIMMER_OUTPUT_MODE,
                 english,
                 ..Self::default()

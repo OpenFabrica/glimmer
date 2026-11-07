@@ -6,6 +6,7 @@ mod router;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use glimmer_platform::KeyCombo;
 use glimmer_platform::protocol::{ClientMessage, ServerMessage};
 
 pub use echo::EchoBackend;
@@ -26,6 +27,17 @@ pub trait Backend {
 
     /// 进程退出前调一次：把还没落盘的东西写下去。缺省什么都不做。
     fn shutdown(&mut self) {}
+
+    /// 开关英文辅助的组合键（`[shortcut] english_assist`），前端只把这一个带修饰键的字母先送来判断；
+    /// `None` 是禁用。缺省用产品缺省组合 Ctrl+Shift+E。
+    fn english_assist_keys(&self) -> Option<KeyCombo> {
+        Some(KeyCombo::ENGLISH_ASSIST_DEFAULT)
+    }
+
+    /// 英文模式这时带不带补全、纠错、预测（`[general] english_candidates`），属性面板据此显示「英+」。缺省开着。
+    fn english_assist(&self) -> bool {
+        true
+    }
 }
 
 /// 所有引擎实例共用的一个后端（Router 本来就按会话分派状态）。

@@ -133,6 +133,32 @@ fn shift_tap_and_panel_toggle_switch_mode() {
 }
 
 #[test]
+fn ctrl_shift_e_toggles_english_assist_and_refreshes_the_mode() {
+    /// Fcitx5 `KeyStates`：Shift 1<<0、Ctrl 1<<2。
+    const CTRL_SHIFT: u32 = (1 << 0) | (1 << 2);
+    let session = session();
+    let mut handled = 0;
+    // SAFETY: 会话有效，handled 可写；outputs 用完即释放
+    unsafe {
+        let before = glimmer_session_english_assist(session);
+        // 按着 Shift 时 Fcitx5 送大写 keysym
+        let outputs = glimmer_session_key(session, u32::from('E'), CTRL_SHIFT, 0, &mut handled);
+        assert_eq!(handled, 1, "回显后端照 Router 契约吃掉组合键");
+        let kinds: Vec<c_int> = (0..glimmer_outputs_len(outputs))
+            .map(|index| glimmer_outputs_kind(outputs, index))
+            .collect();
+        assert!(kinds.contains(&GLIMMER_OUTPUT_MODE), "{kinds:?}");
+        glimmer_outputs_free(outputs);
+        assert_ne!(glimmer_session_english_assist(session), before);
+        let outputs = glimmer_session_key(session, u32::from('E'), CTRL_SHIFT, 0, &mut handled);
+        glimmer_outputs_free(outputs);
+        assert_eq!(glimmer_session_english_assist(session), before);
+        assert_eq!(glimmer_session_composing(session), 0, "组合键不进缓冲");
+        glimmer_session_free(session);
+    }
+}
+
+#[test]
 fn null_pointers_are_harmless() {
     let null = std::ptr::null_mut();
     let mut handled = 7;
@@ -146,6 +172,7 @@ fn null_pointers_are_harmless() {
         glimmer_session_set_surrounding(null, std::ptr::null(), 0);
         glimmer_session_set_private(null, 1);
         assert_eq!(glimmer_session_composing(null), 0);
+        assert_eq!(glimmer_session_english_assist(null), 0);
         glimmer_session_free(null);
         assert_eq!(glimmer_outputs_len(std::ptr::null()), 0);
         assert_eq!(glimmer_outputs_kind(std::ptr::null(), 0), -1);

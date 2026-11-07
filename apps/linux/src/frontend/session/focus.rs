@@ -22,9 +22,7 @@ impl Session {
             session,
             english: self.english,
         });
-        vec![Output::RegisterProperties {
-            english: self.english,
-        }]
+        vec![self.register_output()]
     }
 
     /// 失焦（`FocusOut` / `FocusOutId`）：清掉组句（preedit 已由 daemon 落进应用）、关会话，忘掉这个输入框的前文与光标。
@@ -46,9 +44,7 @@ impl Session {
 
     /// 启用（`Enable`）：登记属性，面板显示中 / 英。
     pub fn enable(&self) -> Vec<Output> {
-        vec![Output::RegisterProperties {
-            english: self.english,
-        }]
+        vec![self.register_output()]
     }
 
     /// 停用（`Disable`，切到别的输入法）：与失焦相同。

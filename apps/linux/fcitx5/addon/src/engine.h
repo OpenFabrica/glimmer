@@ -41,7 +41,7 @@ public:
     // 子模式全称（托盘提示）：中文 / 英文。
     std::string subMode(const fcitx::InputMethodEntry &entry, fcitx::InputContext &ic) override;
 
-    // 子模式短标签（面板指示）：中 / 英。
+    // 子模式短标签（面板指示）：中 / 英 / 英+。
     std::string subModeLabelImpl(const fcitx::InputMethodEntry &entry, fcitx::InputContext &ic) override;
 
     // fcitx5 实例（定时器要用它的事件循环）。

@@ -5,8 +5,8 @@ use glimmer_platform::protocol::{
 };
 
 use super::{SURROUNDING_CHARS, Session};
-use crate::frontend::MODE_PROPERTY;
 use crate::frontend::output::Output;
+use crate::frontend::{ASSIST_PROPERTY, MODE_PROPERTY};
 
 /// ibus `IBusInputPurpose` 里的密码与 PIN（`src/ibustypes.h`）。
 const PURPOSE_PASSWORD: u32 = 8;
@@ -53,12 +53,13 @@ impl Session {
         self.synthesize(u32::from(digit), Some(digit))
     }
 
-    /// 点了属性：中英模式属性切换模式，其余忽略。
+    /// 点了属性：中英模式属性切换模式，英文辅助属性开关补全 / 纠错 / 预测，其余忽略。
     pub fn property_activate(&mut self, name: &str) -> Vec<Output> {
-        if name != MODE_PROPERTY {
-            return Vec::new();
+        match name {
+            MODE_PROPERTY => self.set_english(!self.english),
+            ASSIST_PROPERTY => self.toggle_english_assist(),
+            _ => Vec::new(),
         }
-        self.set_english(!self.english)
     }
 
     /// 应用报来光标矩形（屏幕坐标）；组句中或显示着预测时转给 Router。

@@ -1,10 +1,12 @@
-//! 按键：`ProcessKeyEvent` 的处理，单击 Shift 与属性点击的中英切换。
+//! 按键：`ProcessKeyEvent` 的处理，单击 Shift 与属性点击的中英切换，开关英文辅助的组合键。
 
-use glimmer_platform::protocol::{ClientMessage, KeyEvent};
+use glimmer_platform::protocol::{ClientMessage, KeyEvent, KeyModifiers};
 
 use super::Session;
 use crate::frontend::output::Output;
-use crate::key::{accepts_prediction, is_modifier, is_release, key_event, should_forward};
+use crate::key::{
+    accepts_prediction, is_english_assist, is_modifier, is_release, key_event, should_forward,
+};
 
 impl Session {
     /// 处理一次 IBus 按键，返回 `(吃不吃, 要做的事)`。释放事件只喂单击 Shift 的判定、一律不吃；
@@ -21,6 +23,10 @@ impl Session {
         let Some(event) = key_event(keyval, state, self.english) else {
             return (false, self.end_prediction());
         };
+        // 带 Ctrl / Alt / Super 的字母平时归应用，只有英文辅助这一个组合先送 Router 判断
+        if is_english_assist(&event, self.english_assist_keys()) {
+            return self.forward_english_assist(event);
+        }
         let accept = self.predicting && accepts_prediction(&event);
         if !accept && !should_forward(&event, self.composing) {
             let out = if is_modifier(event.virtual_key) {
@@ -40,9 +46,37 @@ impl Session {
         self.english = english;
         let session = self.session();
         self.notify(ClientMessage::ModeChanged { session, english });
-        out.push(Output::Mode { english });
+        out.push(self.mode_output());
         tracing::info!(english, "切换中英模式");
         out
+    }
+
+    /// 点了英文辅助属性：合成一次配置的组合键送 Router，与按快捷键走同一条路（组着英文时 Router 先把字母上屏）。
+    /// 组合键被配置禁用时 Router 认不出，什么都不做。
+    pub(super) fn toggle_english_assist(&mut self) -> Vec<Output> {
+        let Some(combo) = self.english_assist_keys() else {
+            tracing::info!("英文辅助快捷键已禁用，属性点击不切换");
+            return Vec::new();
+        };
+        let modifiers = KeyModifiers {
+            english_mode: self.english,
+            ..KeyModifiers::from(combo.modifiers)
+        };
+        let vk = u32::from(combo.key.to_ascii_uppercase());
+        self.forward_english_assist(KeyEvent::new(vk, Some(combo.key), modifiers))
+            .1
+    }
+
+    /// 开关英文辅助的组合键送 Router：字母统一成小写再送（X 按着 Shift 报的是大写 keysym，Router 按配置里的小写比）。
+    /// Router 吃了就刷属性（「英」↔「英+」）；回 Passthrough（比如配置刚改掉了这个组合）就照常归应用。
+    fn forward_english_assist(&mut self, mut event: KeyEvent) -> (bool, Vec<Output>) {
+        event.character = event.character.map(|c| c.to_ascii_lowercase());
+        let (consumed, mut out) = self.forward(event);
+        if consumed {
+            out.push(self.mode_output());
+            tracing::info!(assist = self.english_assist(), "快捷键开关英文辅助");
+        }
+        (consumed, out)
     }
 
     /// 把一个按键送给 Router 并摊开结果。起组句的那一键之后补送光标前文与光标位置（对应 DLL 在编辑会话里的补报）。

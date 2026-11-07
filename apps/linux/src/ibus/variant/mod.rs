@@ -13,7 +13,7 @@ use zbus::zvariant::{StructureBuilder, Value};
 
 pub use attribute::Attribute;
 pub use lookup_table::lookup_table;
-pub use property::{mode_property, property_list};
+pub use property::{assist_property, mode_property, property_list};
 pub use text::text;
 
 /// 拼一个 `IBusSerializable`：`(s a{sv} …fields)`。

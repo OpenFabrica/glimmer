@@ -107,7 +107,10 @@ fn lone_shift_toggles_mode_and_commits_pending_text() {
     tap(&mut session, u32::from('n'));
     let (_, out) = tap(&mut session, keysym::SHIFT_L);
     assert_eq!(commits(&out), vec!["n".to_owned()]);
-    assert!(out.contains(&Output::Mode { english: true }));
+    assert!(out.contains(&Output::Mode {
+        english: true,
+        assist: true
+    }));
     assert!(session.english());
     assert!(
         log.lock()
@@ -136,7 +139,10 @@ fn property_click_toggles_mode() {
     let (mut session, _) = session();
     assert_eq!(
         session.property_activate(MODE_PROPERTY),
-        vec![Output::Mode { english: true }]
+        vec![Output::Mode {
+            english: true,
+            assist: true
+        }]
     );
     assert!(session.property_activate("Other").is_empty());
 }

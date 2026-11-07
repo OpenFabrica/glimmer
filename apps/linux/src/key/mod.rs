@@ -10,7 +10,7 @@ mod virtual_key;
 
 use glimmer_platform::protocol::KeyEvent;
 
-pub use filter::{accepts_prediction, is_modifier, should_forward};
+pub use filter::{accepts_prediction, is_english_assist, is_modifier, should_forward};
 pub use modifiers::{is_release, key_modifiers};
 pub use shift_tap::ShiftTap;
 pub use virtual_key::virtual_key;

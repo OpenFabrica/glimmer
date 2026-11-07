@@ -16,7 +16,7 @@ public:
     // 绑定引擎，点击时经它找到会话。
     explicit ModeAction(GlimmerEngine *engine);
 
-    // 短文字：中 / 英。
+    // 短文字：中 / 英 / 英+。
     std::string shortText(fcitx::InputContext *ic) const override;
 
     // 长文字（悬停提示）。

@@ -123,3 +123,15 @@ pub unsafe extern "C" fn glimmer_session_english(session: *const GlimmerSession)
         c_int::from(unsafe { session.as_ref() }.is_some_and(|s| s.session.english()))
     })
 }
+
+/// 英文模式这时带不带补全、纠错、预测（1 / 0）：英文模式下状态区据此显示「英」或「英+」。
+///
+/// # Safety
+/// `session` 为空或是 `glimmer_session_new` 返回、尚未释放的指针。
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn glimmer_session_english_assist(session: *const GlimmerSession) -> c_int {
+    guard("glimmer_session_english_assist", 0, || {
+        // SAFETY: 见函数的 Safety 约定
+        c_int::from(unsafe { session.as_ref() }.is_some_and(|s| s.session.english_assist()))
+    })
+}

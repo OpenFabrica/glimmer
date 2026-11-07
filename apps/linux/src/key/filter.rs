@@ -1,6 +1,7 @@
 //! 「这个键送不送 Router」的判定，照 tsf `key_sink.rs` 的 `would_eat` 搬过来（翻译评审与密码框那两支除外）。
 //! Router 的分派假定只收到这些键；其余键前端直接放行给应用，不碰组句。
 
+use glimmer_platform::KeyCombo;
 use glimmer_platform::protocol::{KeyEvent, KeyModifiers};
 
 /// 主键盘区字母键的 VK 范围。
@@ -29,6 +30,15 @@ pub fn should_forward(event: &KeyEvent, composing: bool) -> bool {
 /// 显示着英文预测时多送的键：不带任何修饰键的 Tab（接受预测）。与 Router 的判定一致，Shift+Tab 不算。
 pub fn accepts_prediction(event: &KeyEvent) -> bool {
     event.virtual_key == 0x09 && event.modifiers.chord() == KeyModifiers::default()
+}
+
+/// 按的是不是开关英文辅助的组合键（`[shortcut] english_assist`）：按键位比字母（VK 不分大小写），
+/// 修饰键比物理组合（去掉 Caps / 中英模式两个状态位），与 Router 的判定一致。`combo` 为 `None`（禁用）时恒为否。
+pub fn is_english_assist(event: &KeyEvent, combo: Option<KeyCombo>) -> bool {
+    combo.is_some_and(|combo| {
+        event.virtual_key == u32::from(combo.key.to_ascii_uppercase())
+            && event.modifiers.chord() == KeyModifiers::from(combo.modifiers)
+    })
 }
 
 /// 单独按下的修饰键（Shift / Ctrl / Alt / Super / Caps Lock 的 VK）：不收起英文预测，收起交给后面那个键。
@@ -101,6 +111,34 @@ mod tests {
         assert!(!accepts_prediction(&event(0x09, None, shift)));
         assert!(!accepts_prediction(&event(0x20, Some(' '), plain)));
         assert!(is_modifier(0xA0) && is_modifier(0x14) && !is_modifier(0x08));
+    }
+
+    #[test]
+    fn english_assist_combo_matches_the_key_position_and_chord() {
+        let combo = Some(KeyCombo::ENGLISH_ASSIST_DEFAULT);
+        let chord = KeyModifiers {
+            ctrl: true,
+            shift: true,
+            ..KeyModifiers::default()
+        };
+        // Caps Lock 与英文模式不算进组合；X 带 Shift 送大写 keysym，按键位比
+        let with_states = KeyModifiers {
+            caps: true,
+            english_mode: true,
+            ..chord
+        };
+        assert!(is_english_assist(&event(0x45, Some('E'), chord), combo));
+        assert!(is_english_assist(
+            &event(0x45, Some('E'), with_states),
+            combo
+        ));
+        let ctrl = KeyModifiers {
+            ctrl: true,
+            ..KeyModifiers::default()
+        };
+        assert!(!is_english_assist(&event(0x45, Some('e'), ctrl), combo));
+        assert!(!is_english_assist(&event(0x52, Some('R'), chord), combo));
+        assert!(!is_english_assist(&event(0x45, Some('E'), chord), None));
     }
 
     #[test]

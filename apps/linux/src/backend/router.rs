@@ -2,6 +2,7 @@
 
 use std::time::{Duration, Instant};
 
+use glimmer_platform::KeyCombo;
 use glimmer_platform::protocol::{ClientMessage, ServerMessage};
 use glimmer_server::Router;
 
@@ -45,5 +46,13 @@ impl Backend for RouterBackend {
 
     fn shutdown(&mut self) {
         self.router.flush_learning();
+    }
+
+    fn english_assist_keys(&self) -> Option<KeyCombo> {
+        self.router.english_assist_keys()
+    }
+
+    fn english_assist(&self) -> bool {
+        self.router.english_assist()
     }
 }

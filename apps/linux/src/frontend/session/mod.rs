@@ -12,13 +12,14 @@ mod key;
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use glimmer_platform::KeyCombo;
 use glimmer_platform::protocol::{
     ClientMessage, Frame, KeyOutcome, ScreenRect, ServerMessage, SessionId,
 };
 
 use super::output::Output;
 use super::view::{auxiliary_text, candidate_view, is_prediction, preedit_view};
-use crate::backend::SharedBackend;
+use crate::backend::{Backend, SharedBackend};
 use crate::key::ShiftTap;
 
 /// 进程内会话号，所有引擎实例共用，单调递增。
@@ -105,13 +106,42 @@ impl Session {
         self.english
     }
 
-    /// 发一条消息等答复。后端锁被毒化（别的线程 panic）时照样取出来用：状态是协议消息级的，不会半更新。
-    fn call(&self, message: ClientMessage) -> Option<ServerMessage> {
-        let mut backend = self
-            .backend
+    /// 英文模式这时带不带补全、纠错、预测（问后端，开关是全局的、可能在别的输入框里刚切过）。
+    pub fn english_assist(&self) -> bool {
+        self.lock_backend().english_assist()
+    }
+
+    /// 开关英文辅助的组合键（问后端，跟着配置走）；`None` 是禁用。
+    fn english_assist_keys(&self) -> Option<KeyCombo> {
+        self.lock_backend().english_assist_keys()
+    }
+
+    /// 刷新属性的指令：当前中英模式与英文辅助开关。
+    fn mode_output(&self) -> Output {
+        Output::Mode {
+            english: self.english,
+            assist: self.english_assist(),
+        }
+    }
+
+    /// 登记属性的指令（获焦 / 启用时）。
+    fn register_output(&self) -> Output {
+        Output::RegisterProperties {
+            english: self.english,
+            assist: self.english_assist(),
+        }
+    }
+
+    /// 取后端的锁。锁被毒化（别的线程 panic）时照样取出来用：状态是协议消息级的，不会半更新。
+    fn lock_backend(&self) -> std::sync::MutexGuard<'_, dyn Backend + Send + 'static> {
+        self.backend
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        backend.send(message)
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// 发一条消息等答复。
+    fn call(&self, message: ClientMessage) -> Option<ServerMessage> {
+        self.lock_backend().send(message)
     }
 
     /// 发一条不需要答复的通知。

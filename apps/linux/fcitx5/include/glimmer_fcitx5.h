@@ -66,6 +66,9 @@ int glimmer_session_polling(const GlimmerSession *session);
 /* 当前是英文模式（1 / 0）。 */
 int glimmer_session_english(const GlimmerSession *session);
 
+/* 英文模式带补全、纠错、预测（1 / 0）：英文模式下状态区显示「英+」。开关是全局的，按 Ctrl+Shift+E（可配）切换。 */
+int glimmer_session_english_assist(const GlimmerSession *session);
+
 /* 事件：都返回要执行的指令，会话为 NULL 或内部出错时返回 NULL */
 
 /* 按键。keysym 是 X keysym（fcitx::KeySym），states 是 fcitx::KeyStates；handled 非 NULL 时写入吃不吃（1 / 0）。 */

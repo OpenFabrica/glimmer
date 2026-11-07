@@ -55,6 +55,12 @@ public:
     // 当前是英文模式。
     bool english() const;
 
+    // 英文模式带补全、纠错、预测（全局开关，Ctrl+Shift+E 切）。
+    bool englishAssist() const;
+
+    // 状态区短文字：中 / 英 / 英+（英文模式且辅助开着）。
+    const char *modeLabel() const;
+
 private:
     // 把光标前文、光标矩形、私密状态报给会话（起组句前调，会话只在需要时用）。
     void syncContext();

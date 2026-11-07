@@ -88,7 +88,7 @@ std::string GlimmerEngine::subMode(const fcitx::InputMethodEntry &, fcitx::Input
 }
 
 std::string GlimmerEngine::subModeLabelImpl(const fcitx::InputMethodEntry &, fcitx::InputContext &ic) {
-    return state(&ic)->english() ? "英" : "中";
+    return state(&ic)->modeLabel();
 }
 
 void GlimmerEngine::refreshMode(fcitx::InputContext *ic) {

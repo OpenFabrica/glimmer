@@ -70,6 +70,15 @@ void GlimmerState::toggleMode() { apply(glimmer_session_toggle_mode(session_)); 
 
 bool GlimmerState::english() const { return glimmer_session_english(session_) != 0; }
 
+bool GlimmerState::englishAssist() const { return glimmer_session_english_assist(session_) != 0; }
+
+const char *GlimmerState::modeLabel() const {
+    if (!english()) {
+        return "中";
+    }
+    return englishAssist() ? "英+" : "英";
+}
+
 void GlimmerState::syncContext() {
     const auto caps = ic_->capabilityFlags();
     glimmer_session_set_private(

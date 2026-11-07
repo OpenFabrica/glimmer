@@ -17,15 +17,21 @@ pub enum Output {
     /// 更新辅助文字（`UpdateAuxiliaryText`）；`None` 收起（`HideAuxiliaryText`）。
     Auxiliary(Option<String>),
 
-    /// 登记属性（`RegisterProperties`），带当前中英模式。
+    /// 登记属性（`RegisterProperties`），带当前中英模式与英文辅助开关。
     RegisterProperties {
         /// 当前是英文模式。
         english: bool,
+
+        /// 英文模式带补全、纠错、预测（`[general] english_candidates`）。
+        assist: bool,
     },
 
-    /// 中英模式变了（`UpdateProperty`）。
+    /// 中英模式或英文辅助开关变了（`UpdateProperty`）。
     Mode {
         /// 现在是英文模式。
         english: bool,
+
+        /// 英文模式带补全、纠错、预测。
+        assist: bool,
     },
 }
