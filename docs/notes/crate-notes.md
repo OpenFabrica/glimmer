@@ -303,6 +303,7 @@ Core 给了就先收窗口、丢掉旧位置（等壳报来新插入点再画）
 轮询 `Poll` 里 `expire_english_prediction`：Core 那边过了 5 秒时效就收起（同一上文 Core 有缓存，不重算）。
 Windows / Linux 空闲时的空格壳不送（过滤器只送空闲的标点与数字），Core 置不上 `after_space`：那边只在「组句中空格选词上屏」（`apply_english` 先 `commit_highlighted` 再把空格 `note_passthrough`）
 与 Tab 接受之后出预测，「词 逗号 空格」、数字键或回车上屏后再敲空格都不出（macOS 都出）。要支持就得每个空闲空格多一次进程间往返，这次没做（`todo.md`）。
+英文辅助开关（`dispatch/english_assist.rs`）：`[shortcut] english_assist`（缺省 Ctrl+Shift+E，`ShortcutConfig::english_assist_keys` 校验：修饰键 + 字母、不与 `translate_selection` / `mode_switch` 组合相同，否则禁用）由壳把组合键送来，Router 按字母（不分大小写）+ 物理修饰键认，翻转 `[general] english_candidates` 并 `persist` 写回配置（与状态条切全角同一机制，热加载读回同一个值）、`break_english_context`、刷新状态条（`StatusView::english_assist`，Windows 英文格画「英+」）；英文组词中翻转时敲过的字母原样上屏，中文组句不动。
 输入日志的会话条目（版本号 / 平台名）由壳用 `Router::set_log_identity` 设置。集成测试 `tests/engine_loop.rs` / `wubi_loop.rs` 用 `assets/sample/` 样例数据，全平台可跑。
 
 ## crates/glimmer-render
@@ -389,7 +390,7 @@ IMK 输入法，源码按 `app / host / imk / candidates / menubar / preferences
   英文模式候选开关 / 下一词预测 `english_prediction`（「通用」页「预测下一个词」，英文候选关着时置灰）/ 中文优先 `chinese_first` / 中文模式英文词候选 `mixed_english_candidates` / emoji 候选 `emoji_candidates` / 拼音方案 `scheme`（`pinyin` 全拼 / 小鹤 / 自然码 / 微软 / 搜狗 / 小浪 / 智能ABC / `zhuyin` 大千注音 / `none` 关；空串时回落到旧键 `shuangpin` / `zhuyin`，老配置照常）/ 五笔 `wubi`（空为关，`86` / `98` / `xsj`，与拼音方案是两条轴、都开就是混输；行为在 `[wubi]`：`auto_select` / `hint` / `fixed_order_length`，
   码表 `Resources/wubi86.qj` / `wubi98.qj` / `wubixsj.qj` 三份都随包，按版本装一份，偏好设置「通用」页的「五笔」弹出菜单四项（关 / 86 / 98 / 新世纪）由 `Variant::ALL` 出，
   壳每次 `push` 后先 `take_auto_commit`）/ 日志级别 `log_level`（缺省 info 不含敲的内容，debug 逐键记，热切换）/ 输入日志 `input_log`；
-  `[shortcut]` 模式键 v / u、`question_mark`（缺省关，开了空缓冲区敲 `?` 进问字）、上屏第一 / 第二个译词的修饰键 `translation` / `translation_second`、删候选 `delete_candidate`（缺省 shift，用户词整删、词库词清学习）、翻译选中文字 `translate_selection`、macOS 中英文切换 `mode_switch`（缺省 `shift` 单击，也支持旧版修饰键加字母，不能与翻译键冲突）；
+  `[shortcut]` 模式键 v / u、`question_mark`（缺省关，开了空缓冲区敲 `?` 进问字）、上屏第一 / 第二个译词的修饰键 `translation` / `translation_second`、删候选 `delete_candidate`（缺省 shift，用户词整删、词库词清学习）、翻译选中文字 `translate_selection`、macOS 中英文切换 `mode_switch`（缺省 `shift` 单击，也支持旧版修饰键加字母，不能与翻译键冲突）、开关英文辅助 `english_assist`（缺省 ⌃⇧E；`imk/controller/event.rs` 在壳里匹配，组句中、中文模式下也认，`Host::toggle_english_assist` 翻转 `english_candidates` 写回配置，正在组的英文词留给下一键原样上屏；菜单「英文补全、纠错、预测」走同一入口，菜单栏指示 `menubar/indicator.rs` 辅助开着写「英+」；偏好设置录制时不合 `english_assist_keys` 的组合不写）；
   `[apps] english_candidates_off` 按 bundle identifier 列出英文模式不给候选的应用（缺省终端 / 编辑器 / IDE，`*` 前缀匹配）；
   `[dictionaries] domains` 打开随包的领域词库（`Resources/dicts/` 12 本（含 AI 与软件开发），缺省只开 `idioms`），`disabled` 关掉用户目录 `dicts/` 里的某本导入词库；
   偏好设置「词库」页随包的可开关、导入的可开关 / 移除，可导入 TSV / Rime yaml / .qj。
@@ -433,6 +434,7 @@ TSF 原有数字 / OEM 标点 / 空格键码按当前布局用 `ToUnicodeEx` 解
 不吃的键框架不会再调 `OnKeyDown`，所以这一步放在 `OnTestKeyDown` 里，`OnTestKeyDown` 因此带了副作用（`would_eat` 本身仍无副作用）；
 键来自另一个文档上下文（点进了别的输入框）先收起，免得 Tab 把词插过去。轮询（`com/poll`）在显示着预测时也拉，帧空了（Server 判过期）就清标志。设置程序「通用」页有「预测下一个词（Tab 接受）」开关，英文候选关着时不可用。
 Server 的候选窗（`ui/candidates/render_data.rs`）按 `is_next_word_frame` 把第一行序号换成 `⇥`。空闲空格 `would_eat` 不吃，所以「词 逗号 空格」这类情形不出预测（见 crates/glimmer-server）。
+开关英文辅助的组合键与翻译键一样登记成 TSF 保留键（`com/key/preserved.rs`，激活时读一次配置，改了要切走再切回输入法才重新登记），命中后当普通按键送 Server，由 Router 认并翻转（见 crates/glimmer-server）。
 设了 `KEYBOARD_DISABLED` / `EMPTYCONTEXT` 的上下文（Chromium 系真正的密码框，`com/context.rs`）键根本不送 Server，自然不出。
 已知限制：同一个输入框里用鼠标点到别处 TSF 收不到通知，预测留到 5 秒过期，这期间按 Tab 会把词插到新光标处；彻底修要加 `ITfTextEditSink`（`todo.md`）。
 连不上 Server 时 DLL 自己拉起它（`tsf/src/com/service/launch.rs`）：`ShellExecuteW` 起与 DLL 同目录的 `glimmer-server.exe`
@@ -455,6 +457,7 @@ IBus 引擎进程 `glimmer-ibus`（package `glimmer-linux`），设计见 `docs/
   IBus 与 Fcitx5 两条路一样（`tests/prediction.rs` 用按脚本答复的假 Router 测）。`view::is_prediction` 就是 Server 的 `is_next_word_frame`；`view/row.rs` 的 `CandidateRow` 带 `label`，预测第一行是 `⇥`、其余为空（`view::candidate_view`），IBus lookup table 与 Fcitx5 都用它；
   Fcitx5 的 `addon/src/candidate.cpp` 给数字标签补「. 」、`⇥` 只空一格。空闲空格同样不送，情形同 Windows（见 crates/glimmer-server）。没有设置界面，开关只在配置文件 `[general] english_prediction`。
   已知限制：有些客户端收到上屏后马上 Reset，预测可能被立刻收掉，要真机逐个看（GTK3、GTK4、Qt、Firefox、Chromium、终端）；Fcitx5 的 C++ 薄壳这次只做了语法检查、没整包链接，发版前要跑一次 `apps/linux/scripts/package-docker.sh`（`todo.md`）。
+- 英文辅助开关：带 Ctrl / Alt / Super 的字母平时不送，只有 `[shortcut] english_assist` 那一个组合先送 Router（`key/filter.rs::is_english_assist` 按键位 + 物理修饰键比，字母转小写再送），Router 吃了就刷模式属性（IBus 面板「英」↔「英+」），回 Passthrough 照常归应用。
 - 启动：`glimmer-ibus --ibus`（`--echo` 换回显后端）；日志写 stderr 与 `~/.local/share/glimmer/logs/glimmer-ibus.<日期>.log`，zbus 压到 warn。
 - 常数：组句中 `Poll` 间隔 60 ms；空闲时学习数据 60 s 落盘一次。
 - 打包：`scripts/package.sh`（Linux 上）/ `scripts/package-docker.sh`（macOS 上，`GLIMMER_DATA_DIR` 指向有产品数据的 `data/`）出 `target/deb/Glimmer-<版本>-<arch>.deb`；装机布局与版本号规则见 `docs/notes/release.md`。

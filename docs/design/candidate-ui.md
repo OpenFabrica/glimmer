@@ -148,7 +148,8 @@ collection behavior 是 CanJoinAllSpaces + FullScreenAuxiliary + Stationary。�
 有候选时数字才选词，没候选（`openfabrica` 这类词表没有的词）时数字是标识符的一部分。**回车、标点原样上屏敲的字母**（再把那个键交给应用），
 词表没有的写法靠回车。0.1.3 之前空格只在动过高亮之后才选词、数字一律是数字，理由是不让词表没有的词被补全替换，
 但测试者按直觉都拿空格和数字选词，2026-09-16 改成与中文一致。Esc 清掉，退格删字母。英文模式不发云联想（词后的下一词预测是本地语言模型给的，不发请求，见下）；回车原样上屏也不记「不纠这个串」。
-组词中 Caps Lock 灭了先把字母原样上屏。配置 `[general] english_candidates = false` 关掉候选，回到纯直通；偏好设置里有勾选框。
+组词中 Caps Lock 灭了先把字母原样上屏。配置 `[general] english_candidates = false` 关掉候选，回到纯直通；偏好设置里有勾选框，
+`[shortcut] english_assist`（缺省 ⌃⇧E / Ctrl+Shift+E）随时翻转它，用户文档管它叫「英文辅助」（为什么不是第三种模式见「中英切换」）。
 
 **下一词预测**（Core `english::predict`，入口 `Engine::english_predictions` / `accept_english_prediction`，2026-11-07）：英文词上屏、紧接着直通了空格、还没开始敲下一个词时，
 候选窗口只显示一个词——英文语言模型按前两个英文词给的最可能的下一个词。没有组句、没有拼音行，与「翻译选中文字」一样借用候选窗口；应用里不放 marked text。
@@ -316,6 +317,7 @@ Core 按 `prediction::restates_question` 剔掉：与本地转出的问题相同
 |---|---|
 | 输入方案：…（灰显） | 当前方案名，只展示。按 Engine 里真生效的两条轴算（`glimmer_platform::scheme_label`，五笔在前：「86 五笔 + 全拼」），码表装不上就不算五笔；单开全拼写「拼音」。菜单栏状态项同一个串（「中 · 86 五笔」），缺省的单开全拼不标 |
 | 云联想（勾选） | 写 `[predict] enabled`。配置开了但 Predictor 没接上（多半是没密钥）时不打勾，标题改成「云联想（启用失败，见日志）」 |
+| 英文补全、纠错、预测（勾选） | 写 `[general] english_candidates`，右侧显示 `[shortcut] english_assist` 的快捷键；开着时菜单栏英文模式显示「英+」 |
 | 模糊音 ▸ 九条（勾选） | 写 `[fuzzy]` 对应键 |
 | 偏好设置… | 打开设置窗口 |
 | 打开日志目录 | 访达打开 `~/Library/Logs/Glimmer/` |
@@ -326,10 +328,10 @@ Core 按 `prediction::restates_question` 剔掉：与本地转出的问题相同
 标题栏透明、不显示窗口标题，页名由内容列顶部的标题带画；右边 `preferences/pager.rs` 同一时间只显示一页，每页一列自上而下，控件按组装进圆角卡片，窗口高度随所选页伸缩（带动画），超过 620 pt 的页（快捷键）装进滚动视图：
 「通用」（学习语言：只列打进包里有释义表的语言；每页候选数 1–9；「拼音方案」弹出菜单按 `Scheme::ALL` 列全拼 / 六套双拼 / 大千注音 / 关，
 与「五笔」弹出菜单（关 / 86 / 98 / 新世纪）是两条独立的轴、两边都开就是混输，谁也不置灰谁；五笔的两个子勾选「四码自动上屏」（混输下 Core 不做，置灰）「显示编码提示」；
-英文模式候选开关与「终端 / 编辑器里不给」）、「候选窗口」（外观 跟随系统 / 浅色 / 深色；
-排布 竖排 / 横排；拼音显示 行内 + 窗口 / 只在行内 / 只在窗口）、「快捷键」（翻页键对与模式键仍是下拉预设；上屏第一 / 第二个译词的修饰键、删除候选的修饰键、翻译选中文字的组合键是**录制按钮**：
+「英文模式带补全、纠错、预测」（`english_candidates`）与「终端 / 编辑器里不给」）、「候选窗口」（外观 跟随系统 / 浅色 / 深色；
+排布 竖排 / 横排；拼音显示 行内 + 窗口 / 只在行内 / 只在窗口）、「快捷键」（翻页键对与模式键仍是下拉预设；上屏第一 / 第二个译词的修饰键、删除候选的修饰键、翻译选中文字与开关英文辅助的组合键是**录制按钮**：
 点一下再按组合键，Esc 取消，`preferences/key_recorder.rs` 的 `KeyRecorder`，NSButton 子类接管 `mouseDown:` / `keyDown:`；
-页底「恢复默认快捷键」一键把翻页键、模式键、三个组合键写回缺省）、「模糊音」（九个勾选，三列摆）、「词库」（「导入词库…」走系统打开文件对话框，接受微明 TSV / Rime `.dict.yaml` / `.qj`，
+页底「恢复默认快捷键」一键把翻页键、模式键、四个组合键写回缺省）、「模糊音」（九个勾选，三列摆）、「词库」（「导入词库…」走系统打开文件对话框，接受微明 TSV / Rime `.dict.yaml` / `.qj`，
 `glimmer_dictionary::import` 转成 `.qj` 放进用户目录 `dicts/`；下面列出每本附加词库：先是随包的 11 本领域词库（标「随包」，勾选写 `[dictionaries] domains`，
 缺省只勾成语，不能移除），再是导入的（勾选写 `disabled`，名字 · 条数 · 许可证，「移除」把文件挪到 `dicts/removed/` 不真删）；
 列表在 `sync` 时按 Host 给的 `DictionaryInfo` 重建，放在 NSScrollView 里全部列出、一屏 10 行超出可滚）、
@@ -356,6 +358,14 @@ Core 按 `prediction::restates_question` 剔掉：与本地转出的问题相同
 |---|---|---|
 | macOS | 缺省单击 Shift（`[shortcut] mode_switch`，可改成修饰键加字母）；Caps Lock（中/英键）也翻转模式：实际模式是「Caps Lock 状态 异或 快捷键切过几次」（`imk/mode.rs`），所以 Caps Lock 灯不单独代表模式，以菜单栏「中 / 英」为准 | 默认小写，按住 Shift 大写；标点不转全角。Caps Lock 亮着时按不按 Shift 送来的都是大写，所以按键时看事件里的 Shift 决定大小写；Caps Lock 亮着、又用快捷键切回中文时，去掉 Caps Lock 造成的大写 |
 | Windows（Phase 5） | Shift 单击切中英；Caps Lock 是真正的大小写锁定 | 默认小写，按住 Shift 大写 |
+
+**中英切换是布尔、切出来的英文永远是直通；补全 / 纠错 / 预测是「英文辅助」，一个可用快捷键开关的设置，不是第三种模式**（2026-11-07）。
+`mode_switch`（Shift）只在「中文」与「按什么上什么」之间切，和系统自带的英文输入同一个心智：用户切到英文时不该还得想「这是带补全的英文还是系统那种英文」。
+要补全的人开着 `english_candidates`（缺省开），不要的时候按 `[shortcut] english_assist`（缺省 ⌃⇧E / Ctrl+Shift+E，修饰键 + 字母；
+与 `mode_switch` / `translate_selection` 相同、没修饰键、不是字母时禁用，`ShortcutConfig::english_assist_keys`）翻掉，写回配置、立刻生效，
+正在组的英文词原样上屏；中文模式下按也翻，下次进英文生效。状态在模式指示上标「英+」（mac 菜单栏、Windows 状态条英文格、IBus 属性面板）。
+不做成 Shift 三态循环（中 → 英+ → 英）：那样 Shift 的含义随状态变，违背「输入方案是配置项，不是模式」与「中 / 英切换始终是布尔」（`contributing.md` 架构约束），
+也让每次切英文多一步。`[apps] english_candidates_off` 仍是按应用的例外，与开关正交。
 
 macOS 上如果系统开了「使用大写锁定键切换 ABC 输入法」，按键会直接切到 ABC 输入源，我们收到 deactivate、
 收窗即可，两条路都能得到小写英文。
