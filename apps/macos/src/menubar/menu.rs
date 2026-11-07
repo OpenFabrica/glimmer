@@ -8,6 +8,9 @@ use objc2_foundation::NSString;
 use super::MenuAction;
 use super::target::MenuTarget;
 
+/// 「英文辅助」菜单项的标题（不含快捷键提示）。
+const ENGLISH_ASSIST_TITLE: &str = "英文补全、纠错、预测";
+
 /// 菜单本体与需要按状态刷新的那几项。
 pub struct InputMenu {
     /// 菜单。挂到状态项和 IMK `menu` 回调的是同一个对象。
@@ -15,6 +18,9 @@ pub struct InputMenu {
 
     /// 「云联想」勾选项。
     cloud: Retained<NSMenuItem>,
+
+    /// 「英文补全、纠错、预测」勾选项，标题带开关快捷键。
+    english_assist: Retained<NSMenuItem>,
 
     /// 模糊音子菜单的九条勾选项，顺序同 [`FuzzyRules::NAMES`]。
     fuzzy: Vec<Retained<NSMenuItem>>,
@@ -47,6 +53,13 @@ impl InputMenu {
         menu.addItem(&scheme);
         let cloud = action_item(mtm, "云联想", Some(MenuAction::ToggleCloud), &target);
         menu.addItem(&cloud);
+        let english_assist = action_item(
+            mtm,
+            ENGLISH_ASSIST_TITLE,
+            Some(MenuAction::ToggleEnglishAssist),
+            &target,
+        );
+        menu.addItem(&english_assist);
 
         let fuzzy_menu = NSMenu::new(mtm);
         fuzzy_menu.setAutoenablesItems(false);
@@ -97,6 +110,7 @@ impl InputMenu {
         Self {
             menu,
             cloud,
+            english_assist,
             fuzzy,
             about,
             about_title,
@@ -140,6 +154,13 @@ impl InputMenu {
         };
         self.cloud.setTitle(&NSString::from_str(title));
         set_checked(&self.cloud, cloud_active);
+        // 快捷键提示写进标题而不是 keyEquivalent：菜单项建好后只能改标题与勾选（见 action_item），键改了也要跟上
+        let assist = match config.shortcut.english_assist_keys() {
+            Some(combo) => format!("{ENGLISH_ASSIST_TITLE}（{}）", combo.label()),
+            None => ENGLISH_ASSIST_TITLE.to_owned(),
+        };
+        self.english_assist.setTitle(&NSString::from_str(&assist));
+        set_checked(&self.english_assist, config.general.english_candidates);
         for (item, name) in self.fuzzy.iter().zip(FuzzyRules::NAMES) {
             set_checked(item, config.fuzzy.is_on(name));
         }

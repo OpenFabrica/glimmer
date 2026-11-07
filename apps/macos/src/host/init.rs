@@ -166,6 +166,7 @@ pub fn init(mtm: MainThreadMarker, info: &BundleInfo) -> Result<(), HostError> {
             input_log_enabled: None,
             translate_keys: KeyCombo::TRANSLATE_DEFAULT,
             mode_switch_keys: Some(ModeSwitch::default()),
+            english_assist_keys: ShortcutConfig::default().english_assist_keys(),
             translation: None,
             notice: None,
             preedit_mode: PreeditMode::default(),

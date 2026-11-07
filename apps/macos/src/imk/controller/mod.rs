@@ -19,6 +19,7 @@ use crate::host;
 use crate::menubar;
 
 mod commit;
+mod english_assist;
 mod event;
 mod next_word;
 mod translation;
@@ -114,6 +115,8 @@ define_class!(
                     h.active_controller = Some(me);
                     h.active_client = client;
                     h.engine.set_application(bundle);
+                    // 换了应用：`[apps] english_candidates_off` 里的应用英文辅助不生效，「英 / 英+」跟着它
+                    h.sync_english_assist_indicator();
                     h.refresh_text_replacements();
                     h.reload_config_if_changed();
                     h.indicator.activate();
@@ -697,12 +700,14 @@ impl GlimmerInputController {
         }
     }
 
-    /// 每个键都问一次应用标识（activateServer 时进程刚拉起可能还拿不到），变了才告诉 Engine。
+    /// 每个键都问一次应用标识（activateServer 时进程刚拉起可能还拿不到），变了才告诉 Engine、刷新「英 / 英+」。
     fn note_application(&self, client: &TextClient<'_>) {
         let app = client.bundle_identifier();
         host::with(|h| {
             if h.engine.application() != app.as_deref() {
                 h.engine.set_application(app);
+                h.sync_english_assist_indicator();
+                h.indicator.update();
             }
         });
     }

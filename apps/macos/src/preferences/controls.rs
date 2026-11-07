@@ -69,8 +69,13 @@ pub(super) fn small_label(mtm: MainThreadMarker, text: &str) -> Retained<NSTextF
 }
 
 /// 控件下方的说明小字，与控件列对齐，放不下就折行（高度按实际排版量出来）。
-pub(super) fn note(layout: &mut Layout, mtm: MainThreadMarker, text: &str) {
-    note_at(layout, mtm, text, CONTROL_X, layout.control_width());
+/// 返回这行字，文字要跟着配置变的（写着快捷键的）在 sync 里改它。
+pub(super) fn note(
+    layout: &mut Layout,
+    mtm: MainThreadMarker,
+    text: &str,
+) -> Retained<NSTextField> {
+    note_at(layout, mtm, text, CONTROL_X, layout.control_width())
 }
 
 /// 整行宽的说明小字（勾选框、按钮下面用）。
@@ -78,7 +83,14 @@ pub(super) fn note_full(layout: &mut Layout, mtm: MainThreadMarker, text: &str) 
     note_at(layout, mtm, text, PAGE_PADDING, layout.inner_width());
 }
 
-fn note_at(layout: &mut Layout, mtm: MainThreadMarker, text: &str, x: f64, width: f64) {
+/// 在 `x` 处摆一行宽 `width` 的说明小字，按实际排版定高度，返回这行字。
+fn note_at(
+    layout: &mut Layout,
+    mtm: MainThreadMarker,
+    text: &str,
+    x: f64,
+    width: f64,
+) -> Retained<NSTextField> {
     let label = small_label(mtm, text);
     label.setUsesSingleLineMode(false);
     if let Some(cell) = label.cell() {
@@ -99,6 +111,7 @@ fn note_at(layout: &mut Layout, mtm: MainThreadMarker, text: &str, x: f64, width
         .ceil();
     layout.place(&label, x, width, height);
     layout.next_row(height);
+    label
 }
 
 /// 勾选框独占一行，从标题列起始处摆（勾选框自带标题，不用左列标题）。

@@ -21,6 +21,9 @@ pub enum MenuAction {
 
     /// 打开偏好设置「关于」页并检查更新。
     CheckUpdate,
+
+    /// 开关英文辅助：英文模式带不带补全、纠错、预测（写 `[general] english_candidates`）。
+    ToggleEnglishAssist,
 }
 
 impl MenuAction {
@@ -30,6 +33,7 @@ impl MenuAction {
             Self::OpenPreferences => 2,
             Self::OpenLogs => 3,
             Self::CheckUpdate => 4,
+            Self::ToggleEnglishAssist => 5,
             Self::ToggleFuzzy(index) => FUZZY_TAG_BASE + index as NSInteger,
         }
     }
@@ -40,6 +44,7 @@ impl MenuAction {
             2 => Self::OpenPreferences,
             3 => Self::OpenLogs,
             4 => Self::CheckUpdate,
+            5 => Self::ToggleEnglishAssist,
             _ => {
                 let index = usize::try_from(tag.checked_sub(FUZZY_TAG_BASE)?).ok()?;
                 (index < FuzzyRules::NAMES.len()).then_some(Self::ToggleFuzzy(index))?
@@ -59,6 +64,7 @@ mod tests {
             MenuAction::OpenPreferences,
             MenuAction::OpenLogs,
             MenuAction::CheckUpdate,
+            MenuAction::ToggleEnglishAssist,
             MenuAction::ToggleFuzzy(0),
             MenuAction::ToggleFuzzy(FuzzyRules::NAMES.len() - 1),
         ];

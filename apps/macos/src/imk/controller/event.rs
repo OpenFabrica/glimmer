@@ -90,6 +90,14 @@ impl GlimmerInputController {
         if host::with(|h| h.translation.is_some()).unwrap_or(false) {
             return self.handle_translation_review(key, client);
         }
+        // 开关英文辅助（缺省 ⌃⇧E）：组句中也认，中文模式下也能切（只翻设置，下次进英文模式生效）
+        let assist = host::with(|h| h.english_assist_keys).flatten();
+        if assist.is_some_and(|combo| {
+            pressed == combo.modifiers
+                && typed.as_deref().and_then(|t| t.chars().next()) == Some(combo.key)
+        }) {
+            return self.toggle_english_assist(event.isARepeat(), client);
+        }
         // 翻译快捷键（不在组句中）：读应用里的选区，交给云端
         let combo = host::with(|h| h.translate_keys).unwrap_or_default();
         if pressed == combo.modifiers

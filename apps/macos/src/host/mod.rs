@@ -9,6 +9,7 @@ mod cloud;
 mod config;
 mod diagnostics;
 mod dictionaries;
+mod english_assist;
 mod init;
 mod learn_text;
 mod model;
@@ -138,6 +139,9 @@ pub struct Host {
     /// 中英文切换键；配置冲突时禁用。
     pub mode_switch_keys: Option<ModeSwitch>,
 
+    /// 开关英文辅助的组合键（配置 `[shortcut] english_assist`）；无效或与别的键冲突时禁用。
+    pub english_assist_keys: Option<KeyCombo>,
+
     /// 进行中的「翻译选中文字」；有它时候选窗口显示的是译文（或「翻译中…」），按键先归它处理。
     pub translation: Option<TranslationJob>,
 
@@ -147,7 +151,7 @@ pub struct Host {
     /// 组句中的拼音显示在行内、候选窗口还是两处。
     pub preedit_mode: PreeditMode,
 
-    /// 英文模式是否给英文候选（配置 `[general] english_candidates`）。
+    /// 英文辅助：英文模式是否带补全、纠错、下一词预测（配置 `[general] english_candidates`）。
     pub english_candidates: bool,
 
     /// 上次从系统读到的文本替换（激活输入法时重读），`[general] system_text_replacements` 开着时并进自定义短语。

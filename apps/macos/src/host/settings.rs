@@ -59,6 +59,10 @@ impl Host {
                     self.apply_config(false);
                 }
             }
+            // 与快捷键同一个入口；正在组的英文词留给下一键原样上屏（见 toggle_english_assist）
+            MenuAction::ToggleEnglishAssist => {
+                self.toggle_english_assist();
+            }
             MenuAction::ToggleFuzzy(index) => {
                 let name = FuzzyRules::NAMES[index];
                 let on = !self.settings.config().fuzzy.is_on(name);
@@ -326,6 +330,29 @@ impl Host {
                     Err(error) => tracing::warn!(%error, "快捷键不合法，未改"),
                 }
             }
+            // 与中英切换、翻译键相同或不是修饰键 + 字母时不写，免得一个组合键触发两个动作
+            (Setting::EnglishAssistKeys, SettingValue::Text(text)) => {
+                match text.parse::<KeyCombo>() {
+                    Ok(combo) => {
+                        let candidate = ShortcutConfig {
+                            english_assist: combo,
+                            ..config.shortcut
+                        };
+                        if candidate.english_assist_keys().is_some() {
+                            self.settings.set_value(
+                                "shortcut",
+                                "english_assist",
+                                combo.key_string(),
+                            );
+                        } else {
+                            tracing::warn!(
+                                "开关英文辅助须为修饰键加字母，且不能与中英切换、翻译键相同，未改"
+                            );
+                        }
+                    }
+                    Err(error) => tracing::warn!(%error, "快捷键不合法，未改"),
+                }
+            }
             (Setting::ResetShortcuts, _) => {
                 let defaults = ShortcutConfig::default();
                 self.settings.set_value(
@@ -355,6 +382,11 @@ impl Host {
                     "shortcut",
                     "translate_selection",
                     defaults.translate_selection.key_string(),
+                );
+                self.settings.set_value(
+                    "shortcut",
+                    "english_assist",
+                    defaults.english_assist.key_string(),
                 );
                 self.settings.set_value(
                     "shortcut",

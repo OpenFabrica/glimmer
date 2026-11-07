@@ -4,7 +4,8 @@ use glimmer_core::{Language, PunctuationMode};
 use glimmer_platform::{Config, MAX_PAGE_SIZE, Scheme};
 use objc2::MainThreadMarker;
 use objc2::rc::Retained;
-use objc2_app_kit::{NSButton, NSPopUpButton};
+use objc2_app_kit::{NSButton, NSPopUpButton, NSTextField};
+use objc2_foundation::NSString;
 
 use crate::preferences::controls::{
     checkbox, language_label, note, row_aligned_checkbox, row_popup, row_sub_checkbox, select,
@@ -41,8 +42,11 @@ pub struct GeneralPage {
     /// 繁体输出模式。
     traditional: Retained<NSButton>,
 
-    /// 英文模式也给候选。
+    /// 英文模式带补全、纠错、预测（英文辅助）。
     english: Retained<NSButton>,
+
+    /// 英文辅助下面的说明，写着配置里实际的开关快捷键。
+    english_note: Retained<NSTextField>,
 
     /// 终端 / 编辑器里不给英文候选。
     english_off_in_apps: Retained<NSButton>,
@@ -184,13 +188,15 @@ impl GeneralPage {
             mtm,
             "「进入英文直输」能直接打 hello, world 这样带标点的英文；「先上屏候选再出标点」是 nihao, 出「你好，」；「自动」按拼音切不切得开来定，切不开的 hello 直输、切得开的 nihao 上屏。翻页键不受影响。",
         );
-        let english = checkbox(mtm, "英文模式也给候选", Setting::EnglishCandidates, target);
-        row_aligned_checkbox(layout, &english);
-        note(
-            layout,
+        let english = checkbox(
             mtm,
-            "Tab 或方向键选词；空格、回车、标点仍原样上屏敲的字母，不选词时与直接打字一样。",
+            "英文模式带补全、纠错、预测",
+            Setting::EnglishCandidates,
+            target,
         );
+        row_aligned_checkbox(layout, &english);
+        // 先按最长的组合键写一遍量出高度，sync 再换成配置里实际的键，换了键也不会挤出这一行
+        let english_note = note(layout, mtm, &english_assist_note(Some("⌃⌥⇧⌘E")));
         let english_off_in_apps = checkbox(
             mtm,
             "但在终端和代码编辑器里不给",
@@ -215,7 +221,7 @@ impl GeneralPage {
         note(
             layout,
             mtm,
-            "hello 给出 hello、compa 补全成 company 这类英文词；不勾后只给中文。与上面的「英文模式也给候选」无关。",
+            "hello 给出 hello、compa 补全成 company 这类英文词；不勾后只给中文。与上面的「英文模式带补全、纠错、预测」无关。",
         );
         let chinese_first = checkbox(
             mtm,
@@ -247,6 +253,7 @@ impl GeneralPage {
             wubi_hint,
             traditional,
             english,
+            english_note,
             english_off_in_apps,
             english_prediction,
             chinese_first,
@@ -318,6 +325,12 @@ impl GeneralPage {
         self.wubi_hint.setEnabled(wubi.is_some());
         set_checked(&self.traditional, general.traditional);
         set_checked(&self.english, general.english_candidates);
+        let assist = config
+            .shortcut
+            .english_assist_keys()
+            .map(|combo| combo.label());
+        self.english_note
+            .setStringValue(&NSString::from_str(&english_assist_note(assist.as_deref())));
         set_checked(
             &self.english_off_in_apps,
             config.apps.has_english_candidates_off(),
@@ -334,5 +347,14 @@ impl GeneralPage {
         // 中文优先只在中文模式给英文词时有意义
         self.chinese_first
             .setEnabled(general.mixed_english_candidates);
+    }
+}
+
+/// 英文辅助勾选框下面的说明；`key` 是开关快捷键的写法，快捷键禁用（冲突或无效）时为 `None`，不提按键。
+fn english_assist_note(key: Option<&str>) -> String {
+    let base = "关着时按什么上什么，和系统自带的英文一样";
+    match key {
+        Some(key) => format!("{base}；按 {key} 随时开关。"),
+        None => format!("{base}。"),
     }
 }

@@ -46,6 +46,9 @@ pub struct ModeIndicator {
     /// 云联想开着：标题带云朵，让用户一眼知道上下文会发出去。
     cloud: bool,
 
+    /// 当前应用里英文辅助（补全、纠错、预测）开着：英文模式标题写「英+」，关着写「英」。
+    assist: bool,
+
     /// 当前输入方案在标题里的附注（「86 五笔」「小鹤双拼」，混输是「86 五笔 + 全拼」），
     /// 单开全拼是缺省、不标，那时为空串。
     scheme: String,
@@ -68,6 +71,7 @@ impl ModeIndicator {
             shown: false,
             english: None,
             cloud: false,
+            assist: false,
             scheme: String::new(),
             source_id: input_source::main_bundle_source_id(),
             mtm,
@@ -150,6 +154,14 @@ impl ModeIndicator {
         self.english = None;
     }
 
+    /// 换英文辅助的开关状态，下次 update 重设标题。
+    pub fn set_english_assist(&mut self, assist: bool) {
+        if self.assist != assist {
+            self.assist = assist;
+            self.english = None;
+        }
+    }
+
     /// 换输入方案附注（`"86 五笔"`、`"86 五笔 + 全拼"`，空串不标），下次 update 重设标题。
     pub fn set_scheme(&mut self, scheme: String) {
         self.scheme = scheme;
@@ -167,8 +179,13 @@ impl ModeIndicator {
         }
         self.english = Some(english);
         if let Some(button) = self.item.button(self.mtm) {
-            // 中文模式下附方案名（「中 · 86 五笔」）；英文模式与方案无关，不附
-            let mut title = if english { "英" } else { "中" }.to_owned();
+            // 中文模式下附方案名（「中 · 86 五笔」）；英文模式与方案无关，不附，辅助开着写「英+」
+            let mut title = match (english, self.assist) {
+                (true, true) => "英+",
+                (true, false) => "英",
+                (false, _) => "中",
+            }
+            .to_owned();
             if !english && !self.scheme.is_empty() {
                 title.push_str(" · ");
                 title.push_str(&self.scheme);

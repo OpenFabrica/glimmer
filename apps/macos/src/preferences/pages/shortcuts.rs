@@ -1,4 +1,4 @@
-//! 「快捷键」页：中英切换、翻页、前缀、译词上屏 / 删候选 / 翻译选中文字的组合键。
+//! 「快捷键」页：中英切换、翻页、前缀、译词上屏 / 删候选 / 翻译选中文字 / 开关英文辅助的组合键。
 
 use glimmer_core::ModeKeys;
 use glimmer_platform::{Config, PAGE_KEY_OPTIONS};
@@ -42,6 +42,9 @@ pub struct ShortcutsPage {
 
     /// 翻译选中文字的组合键。
     translate_selection: Retained<KeyRecorder>,
+
+    /// 开关英文辅助（英文模式的补全、纠错、预测）的组合键。
+    english_assist: Retained<KeyRecorder>,
 }
 
 impl ShortcutsPage {
@@ -162,6 +165,20 @@ impl ShortcutsPage {
             "在应用里选中一段文字再按这个键，译文（学习语言）出现在候选窗口：回车替换选中的文字，Esc 保留原文。需要开着云服务。",
         );
         layout.end_group();
+        let english_assist = row_recorder(
+            layout,
+            mtm,
+            "开关英文辅助",
+            Setting::EnglishAssistKeys,
+            false,
+            target,
+        );
+        note(
+            layout,
+            mtm,
+            "随时开关英文模式的补全、纠错、预测，开着时菜单栏显示「英+」。不能与中英切换、翻译键相同。",
+        );
+        layout.end_group();
         note_full(
             layout,
             mtm,
@@ -188,6 +205,7 @@ impl ShortcutsPage {
             translation_second,
             delete_candidate,
             translate_selection,
+            english_assist,
         }
     }
 
@@ -227,5 +245,13 @@ impl ShortcutsPage {
         let translate = config.shortcut.translate_selection;
         self.translate_selection
             .show(&translate.key_string(), &translate.label());
+        // 与中英切换一样：冲突或无效时 Core 侧已禁用，按钮上说清楚
+        let assist = config.shortcut.english_assist;
+        let label = if config.shortcut.english_assist_keys().is_some() {
+            assist.label()
+        } else {
+            "快捷键冲突或无效，请重新录制".to_owned()
+        };
+        self.english_assist.show(&assist.key_string(), &label);
     }
 }

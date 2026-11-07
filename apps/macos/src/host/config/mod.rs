@@ -45,6 +45,7 @@ impl Host {
         self.delete_keys = config.shortcut.delete_keys();
         self.translate_keys = config.shortcut.translate_selection;
         self.mode_switch_keys = config.shortcut.mode_switch_keys();
+        self.english_assist_keys = config.shortcut.english_assist_keys();
         self.page_size = config.general.page_size();
         self.cloud_slots = config.predict.slots;
         self.page_keys = config.general.page_keys();
@@ -115,6 +116,8 @@ impl Host {
         let label = glimmer_platform::scheme_label(shown, wubi);
         self.indicator.set_cloud(cloud_active);
         self.indicator.set_scheme(label.clone());
+        // 外部改了 english_candidates / [apps] 也走这里，「英 / 英+」跟着变
+        self.sync_english_assist_indicator();
         self.indicator.update();
         self.menu
             .sync(&config, cloud_active, &label, self.settings.error());

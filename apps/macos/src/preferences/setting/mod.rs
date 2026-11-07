@@ -152,7 +152,10 @@ pub enum Setting {
     /// `[shortcut] mode_switch`，中英文切换组合键。
     ModeSwitchKeys,
 
-    /// 「恢复默认快捷键」按钮：翻页、前缀、中英切换、译词、删候选与翻译键全部回缺省。
+    /// `[shortcut] english_assist`，快捷键录制按钮（修饰键 + 字母）：开关英文辅助。
+    EnglishAssistKeys,
+
+    /// 「恢复默认快捷键」按钮：翻页、前缀、中英切换、译词、删候选、翻译与开关英文辅助键全部回缺省。
     ResetShortcuts,
 
     /// 「导入词库…」按钮：选文件，转成 `.qj` 放进用户目录 `dicts/`。
@@ -304,6 +307,7 @@ impl Setting {
             Self::UpdateCheck => 58,
             Self::CheckUpdate => 59,
             Self::InstallUpdate => 60,
+            Self::EnglishAssistKeys => 68,
             Self::Fuzzy(index) => FUZZY_TAG_BASE + index as NSInteger,
             Self::DictionaryEnabled(index) => DICTIONARY_ENABLED_TAG_BASE + index as NSInteger,
             Self::DictionaryRemove(index) => DICTIONARY_REMOVE_TAG_BASE + index as NSInteger,
@@ -379,6 +383,7 @@ impl Setting {
             58 => Self::UpdateCheck,
             59 => Self::CheckUpdate,
             60 => Self::InstallUpdate,
+            68 => Self::EnglishAssistKeys,
             _ if tag >= DICTIONARY_REMOVE_TAG_BASE => {
                 let index = usize::try_from(tag - DICTIONARY_REMOVE_TAG_BASE).ok()?;
                 (index < MAX_DICTIONARIES).then_some(Self::DictionaryRemove(index))?
@@ -434,6 +439,7 @@ mod tests {
             Setting::TranslationSecondKeys,
             Setting::TranslateSelectionKeys,
             Setting::ModeSwitchKeys,
+            Setting::EnglishAssistKeys,
             Setting::ResetShortcuts,
             Setting::ImportDictionary,
             Setting::Scheme,
