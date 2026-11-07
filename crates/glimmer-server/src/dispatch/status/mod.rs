@@ -66,7 +66,7 @@ impl Router {
     }
 
     /// 写回配置文件一个键；没有配置路径（测试）就只改内存。
-    fn persist(&self, section: &str, key: &str, value: impl Into<toml_edit::Value>) {
+    pub(super) fn persist(&self, section: &str, key: &str, value: impl Into<toml_edit::Value>) {
         let Some(path) = self.config_path() else {
             return;
         };
@@ -98,6 +98,7 @@ impl Router {
                         && wubi.is_none(),
                     scheme: Some(label).filter(|label| !label.is_empty()),
                     full_width: self.full_width_for(english),
+                    english_assist: self.config.english_candidates_in(self.focused_app()),
                     theme: self.config.theme,
                     anchor: self.config.status_pos,
                 });

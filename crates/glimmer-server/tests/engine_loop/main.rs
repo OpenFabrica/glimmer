@@ -2,6 +2,7 @@
 
 mod composing;
 mod english;
+mod english_assist;
 mod modes;
 mod rescoring;
 mod shortcuts;

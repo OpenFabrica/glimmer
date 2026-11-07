@@ -70,6 +70,9 @@ pub struct RouterConfig {
     /// 「翻译选中文字」快捷键（`[shortcut] translate_selection`）。
     pub translate_selection: KeyCombo,
 
+    /// 开关英文辅助的快捷键（`[shortcut] english_assist`）；无效或与别的快捷键冲突时为 `None`，不拦这个组合。
+    pub english_assist: Option<KeyCombo>,
+
     /// 悬浮状态条开关（`[status_bar] enabled`）。
     pub status_enabled: bool,
 
@@ -122,6 +125,7 @@ impl From<&Config> for RouterConfig {
             },
             delete_keys: config.shortcut.delete_keys().into(),
             translate_selection: config.shortcut.translate_selection,
+            english_assist: config.shortcut.english_assist_keys(),
             status_enabled: config.status_bar.enabled,
             status_pos: config.status_bar.x.zip(config.status_bar.y),
         }

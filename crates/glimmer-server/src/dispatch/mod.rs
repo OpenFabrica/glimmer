@@ -2,11 +2,12 @@
 //! 产出回给客户端的 [`ServerMessage`]。下文说的「DLL」泛指客户端。
 //! 消息分派在 [`message`]，会话在 [`session`]，组句展示状态在 [`composed`]，按键在 [`key`]，
 //! 候选窗口输出在 [`candidates`]，状态条在 [`status`]，翻译选中文字在 [`translate`]，配置热加载在 [`reload`]，
-//! 本地整句模型在 [`rescore`]，英文下一词预测的显示态在 [`next_word`]。
+//! 本地整句模型在 [`rescore`]，英文下一词预测的显示态在 [`next_word`]，英文辅助开关在 [`english_assist`]。
 
 mod candidates;
 mod composed;
 mod config;
+mod english_assist;
 mod key;
 mod message;
 mod next_word;

@@ -15,6 +15,10 @@ pub struct StatusView {
     /// 当前模式的全角标点开着（中英各记一份配置）；关着时格子显示 `,.` 画成灰的。
     pub full_width: bool,
 
+    /// 英文模式这时带不带补全、纠错、预测：`[general] english_candidates` 开着、且当前应用没被 `[apps]` 关掉。
+    /// 中文模式下也照实填，画不画由各壳定（Windows 英文格写成「英+」）。
+    pub english_assist: bool,
+
     /// 外观模式。
     pub theme: ThemeMode,
 

@@ -114,7 +114,8 @@ impl Router {
         }
     }
 
-    /// 一次按键：翻译评审优先；显示着英文预测时 Tab 接受、其余键先收起预测再照原来的路走；最后看要不要出新的预测。
+    /// 一次按键：翻译评审优先；显示着英文预测时 Tab 接受、其余键先收起预测再照原来的路走；
+    /// 翻译选中文字、英文辅助两个组合键在普通分流之前认；最后看要不要出新的预测。
     fn handle_key(&mut self, session: SessionId, event: KeyEvent) -> ServerMessage {
         self.ensure_focus(session);
         self.notice = None;
@@ -154,7 +155,13 @@ impl Router {
                 request: self.selection_seq,
             };
         }
-        let (commit, outcome) = match self.apply_key(&event) {
+        // 英文辅助开关要在 apply_key 之前认：那里带 Ctrl / Alt / Win 的组合键一律直通给应用
+        let effect = if self.matches_english_assist_combo(&event) {
+            self.toggle_english_assist()
+        } else {
+            self.apply_key(&event)
+        };
+        let (commit, outcome) = match effect {
             Effect::Changed(commit) => {
                 self.recompose();
                 (commit, KeyOutcome::Consumed)
